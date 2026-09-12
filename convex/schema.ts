@@ -7,7 +7,9 @@ export default defineSchema({
     runFinish: v.optional(v.boolean()), runMessageId: v.optional(v.string()), leaseUntil: v.optional(v.number()),
     responseId: v.optional(v.string()), researchKind: v.optional(v.string()), polls: v.optional(v.number())
   }).index("by_owner", ["owner", "updatedAt"]),
-  invites: defineTable({ email: v.string(), active: v.boolean(), updatedAt: v.number(), updatedBy: v.string() }).index("by_email", ["email"]),
+    invites: defineTable({ email: v.string(), active: v.boolean(), updatedAt: v.number(), updatedBy: v.string() }).index("by_email", ["email"]),
+  waitlist: defineTable({ owner: v.string(), email: v.string(), name: v.string(), requestedAt: v.number(), lastAttemptAt: v.number(), attempts: v.number() })
+    .index("by_email", ["email"]).index("by_requested", ["requestedAt"]),
   settings: defineTable({
     key: v.string(), enabled: v.optional(v.boolean()), currency: v.optional(v.string()), intermediate: v.optional(v.number()), advanced: v.optional(v.number()),
     basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), intermediateResearch: v.optional(v.number()), advancedTurns: v.optional(v.number()), advancedResearch: v.optional(v.number())

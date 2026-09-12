@@ -121,6 +121,7 @@ with sync_playwright() as p:
         check(f'{width}px mobile conversation switch works', page.locator('.chat-panel').is_visible())
     page.set_viewport_size({'width':1440, 'height':1100})
     page.locator('[data-action="settings"]').click()
+    check('Admin settings shows the waitlist', page.get_by_role('heading', name='Waitlist').count() == 1 and page.get_by_text('No one is waiting for beta access.').count() == 1)
     page.locator('#invite-form input').fill('test-founder@example.com')
     page.locator('#invite-form button[type="submit"]').click()
     check('Admin can add a demo allowlist entry', page.locator('[data-action="invite-toggle"][data-email="test-founder@example.com"]').count() == 1)

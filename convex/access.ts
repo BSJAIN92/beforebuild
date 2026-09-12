@@ -26,6 +26,26 @@ export const me = query({ args: {}, handler: async ctx => {
   const allowed = verified && await emailAllowed(ctx, email);
   return { allowed, reason: !verified ? "Please verify your email. The authentication token must include email_verified=true." : allowed ? "" : "This email is not on the beta allowlist. Ask the beta owner to add it.", viewer: { email, name: identity.givenName || identity.name || "Founder", admin: envEmails("ADMIN_EMAILS").has(email), demo: false } };
 } });
+export const joinWaitlist = mutation({ args: {}, handler: async ctx => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new ConvexError("Please sign in to join the waitlist.");
+  const email = normalizeEmail(identity.email || "");
+  if (!email || identity.emailVerified !== true) throw new ConvexError("Verify your email before joining the waitlist.");
+  if (await emailAllowed(ctx, email)) return { waiting: false };
+  const now = Date.now();
+  const existing = await ctx.db.query("waitlist").withIndex("by_email", q => q.eq("email", email)).unique();
+  if (existing) await ctx.db.patch(existing._id, { owner: identity.tokenIdentifier, name: identity.givenName || identity.name || "Founder", lastAttemptAt: now, attempts: existing.attempts + 1 });
+  else {
+    if ((await ctx.db.query("waitlist").take(1000)).length >= 1000) throw new ConvexError("The beta waitlist is currently full.");
+    await ctx.db.insert("waitlist", { owner: identity.tokenIdentifier, email, name: identity.givenName || identity.name || "Founder", requestedAt: now, lastAttemptAt: now, attempts: 1 });
+  }
+  return { waiting: true };
+} });
+export const listWaitlist = query({ args: {}, handler: async ctx => {
+  await requireViewer(ctx, true);
+  const entries = await ctx.db.query("waitlist").withIndex("by_requested").order("desc").take(500);
+  return entries.map(({ email, name, requestedAt, lastAttemptAt, attempts }) => ({ email, name, requestedAt, lastAttemptAt, attempts }));
+} });
 export const listInvites = query({ args: {}, handler: async ctx => {
   await requireViewer(ctx, true);
   const stored = await ctx.db.query("invites").take(500);
@@ -41,4 +61,8 @@ export const setInvite = mutation({ args: { email: v.string(), active: v.boolean
   const changes = { email, active: args.active, updatedAt: Date.now(), updatedBy: viewer.owner };
   if (existing) await ctx.db.patch(existing._id, changes);
   else { if ((await ctx.db.query("invites").take(500)).length >= 500) throw new ConvexError("This beta supports up to 500 allowlist records."); await ctx.db.insert("invites", changes); }
+  if (args.active) {
+    const waiting = await ctx.db.query("waitlist").withIndex("by_email", q => q.eq("email", email)).unique();
+    if (waiting) await ctx.db.delete(waiting._id);
+  }
 } });

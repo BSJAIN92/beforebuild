@@ -17,13 +17,20 @@ test('Clerk authentication stays on the application domain', () => {
   const provider = fs.readFileSync('components/Providers.tsx', 'utf8');
   const root = fs.readFileSync('components/ClientRoot.tsx', 'utf8');
   const signInRoute = fs.readFileSync('app/sign-in/[[...sign-in]]/page.tsx', 'utf8');
-  const signUpRoute = fs.readFileSync('app/sign-up/[[...sign-up]]/page.tsx', 'utf8');
-  assert.match(provider, /<ClerkProvider\s+signInUrl="\/sign-in"\s+signUpUrl="\/sign-up"\s+afterSignOutUrl="\/sign-in">/);
+  assert.match(provider, /<ClerkProvider\s+signInUrl="\/sign-in"\s+afterSignOutUrl="\/sign-in">/);
   assert.match(root, /router\.replace\("\/sign-in"\)/);
   assert.doesNotMatch(root, /RedirectToSignIn/);
   assert.doesNotMatch(root, /routing="hash"/);
-  assert.match(signInRoute, /<SignIn\s+path="\/sign-in"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);
-  assert.match(signUpRoute, /<SignUp\s+path="\/sign-up"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);
+  assert.match(signInRoute, /<SignIn\s+path="\/sign-in"\s+routing="path"\s+forceRedirectUrl="\/"\s+withSignUp\s*\/>/);
+  assert.equal(fs.existsSync('app/sign-up/[[...sign-up]]/page.tsx'), false);
+  assert.match(root, /api\.access\.joinWaitlist/);
+  const access = fs.readFileSync('convex/access.ts', 'utf8');
+  const schema = fs.readFileSync('convex/schema.ts', 'utf8');
+  const ui = fs.readFileSync('lib/ui.ts', 'utf8');
+  assert.match(access, /export const joinWaitlist = mutation/);
+  assert.match(access, /export const listWaitlist = query/);
+  assert.match(schema, /waitlist: defineTable/);
+  assert.match(ui, /Waitlist<\/h2>/);
 });
 for (const tier of ['basic', 'intermediate', 'advanced']) test(`${tier}: complete interview gives all nine blocks and a validation plan`, () => {
   let i = idea(tier);

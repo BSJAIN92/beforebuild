@@ -1,10 +1,11 @@
 import type { CanvasItem, BlockKey, ChallengeDecision, Idea, Tier } from "./model";
 export interface Viewer { email: string; name: string; admin: boolean; demo: boolean; }
 export interface Invite { email: string; active: boolean; }
+export interface WaitlistEntry { email: string; name: string; requestedAt: number; lastAttemptAt: number; attempts: number; }
 export interface Pricing { enabled: boolean; currency: string; intermediate: number; advanced: number; }
 export interface UsageLimits { basicTurns: number; intermediateTurns: number; intermediateResearch: number; advancedTurns: number; advancedResearch: number; }
 export interface AbuseDashboard { day: string; users: number; totals: { basicTurns: number; intermediateTurns: number; advancedTurns: number; intermediateResearch: number; advancedResearch: number; }; rejected: { id: string; email: string; ideaId: string; tier: string; text: string; reason: string; source: "local" | "moderation"; createdAt: number; }[]; }
-export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; usageLimits: UsageLimits; invites: Invite[]; abuse?: AbuseDashboard; }
+export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; usageLimits: UsageLimits; invites: Invite[]; waitlist: WaitlistEntry[]; abuse?: AbuseDashboard; }
 export interface Backend {
   snapshot(): Snapshot;
   subscribe(callback: () => void): () => void;

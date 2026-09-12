@@ -92,14 +92,14 @@ export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
   return next;
 }
 export function createDemoBackend(): Backend {
-  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 }, invites: [] };
+  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 }, invites: [], waitlist: [] };
   let persistenceError = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Snapshot;
       if (Array.isArray(parsed.ideas) && parsed.ideas.every(i => i && typeof i.id === "string" && typeof i.description === "string" && i.canvas && Array.isArray(i.messages))) {
-        data = { ...data, ideas: parsed.ideas, pricing: parsed.pricing || data.pricing, usageLimits: parsed.usageLimits || data.usageLimits, invites: parsed.invites || [] };
+        data = { ...data, ideas: parsed.ideas, pricing: parsed.pricing || data.pricing, usageLimits: parsed.usageLimits || data.usageLimits, invites: parsed.invites || [], waitlist: parsed.waitlist || [] };
         data.ideas = data.ideas.map(i => isBusy(i) ? { ...i, status: "draft", statusLabel: "Resumed from your last save" } : i);
       }
     }
