@@ -102,7 +102,7 @@ Update this table immediately after every approved step.
 | 3 | Create and connect public GitHub repository | COMPLETE | 2026-09-12 | Public `BSJAIN92/beforebuild` exists; `main` is the default branch and tracks `origin/main`; expected root layout and history scan verified. Next action: request separate approval for Step 4. |
 | 4 | Install dependencies and create lockfile | COMPLETE | 2026-09-12 | `npm install` and a clean `npm ci` succeeded on Node.js v24.19.0; lockfile v3 created; audit found 0 vulnerabilities. Clerk post-install script remained blocked pending review. Next action: request separate approval for Step 5. |
 | 5 | Fix and run the local automated checks | COMPLETE | 2026-09-12 | All 29 tests, standalone demo build, full type check, and Next.js production build passed on Node.js v24.19.0. No product-code fix was needed. Next action: request separate approval and access for Step 6. |
-| 6 | Create and configure Convex development deployment | NOT STARTED | — | Step 5 complete; awaiting separate user approval and Convex development access for Step 6. |
+| 6 | Create and configure Convex development deployment | IN PROGRESS | 2026-09-12 | Setup reached Convex's required cloud-versus-local deployment choice and was cancelled without selecting. No project or local config was created. Awaiting user approval to choose cloud (recommended for Vercel) or local beta. |
 | 7 | Configure Clerk development authentication | NOT STARTED | — | Await Step 6 and user access. |
 | 8 | Verify the connected application locally | NOT STARTED | — | Await Step 7. |
 | 9 | Run live access, ownership, resilience, and AI checks | NOT STARTED | — | Await Step 8. |
@@ -357,6 +357,20 @@ Acceptance check:
 - Results and any remaining expected Convex error are recorded.
 
 ### Step 6 — Create and configure Convex development deployment
+
+Progress record:
+
+```text
+Status: IN PROGRESS
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user approved Step 6, confirmed no existing Convex project, and approved creating a new project named beforebuild. No approval was given for Convex's subsequently presented cloud-versus-local deployment choice.
+Actions performed: Read the authoritative plan and verified Step 5 was COMPLETE; confirmed the Git working tree initially matched origin/main; inspected the current Convex CLI help; started one-time new-project configuration; accepted only the explicitly approved project name beforebuild; stopped safely at the required choice between a cloud deployment and local deployment beta; verified no local Convex configuration or environment file was created.
+Commands run: Get-Content DEPLOYMENT_EXECUTION_PLAN.md; git status --short --branch; npx convex dev --help; npx convex dev --configure new --once in an interactive terminal; accepted project name beforebuild; sent Ctrl+C at the cloud/local choice; Get-ChildItem metadata-only check for .env*/.convex* paths; Test-Path for .env.local and .convex.
+Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this progress. No Convex-generated bindings, product code, package files, environment files, or secret-bearing files changed. No external Convex project/deployment was created before cancellation.
+Verification evidence: Convex CLI offered project name beforebuild and then required choosing either "cloud deployment" or "local deployment (BETA)." The choice was not made. After cancellation, Git was clean, .env.local did not exist, .convex did not exist, and only the tracked .env.example matched the environment-file check. Code generation, schema sync, functions, deployment identity, and safe environment limits therefore remain pending. The Clerk postinstall script was not approved or run.
+Blocker or next action: One user decision is required: approve "cloud deployment" (recommended because the target is Vercel and a hosted Convex backend) or choose the local deployment beta. After that approval, resume Step 6, handle any login/team prompt without guessing, create/link beforebuild, perform one-time codegen/sync, and set only AI_MAX_DAILY_TURNS=20, AI_MAX_DAILY_RESEARCH=1, AI_MAX_IDEAS=10, and BILLING_ENABLED=false. Keep CLERK_JWT_ISSUER_DOMAIN, ADMIN_EMAILS, BETA_ALLOWLIST, OPENAI_API_KEY, provider/model settings, and Step 7 pending.
+```
 
 Actions:
 
