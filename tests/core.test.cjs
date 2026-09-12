@@ -19,7 +19,8 @@ test('Clerk authentication stays on the application domain', () => {
   const signInRoute = fs.readFileSync('app/sign-in/[[...sign-in]]/page.tsx', 'utf8');
   const signUpRoute = fs.readFileSync('app/sign-up/[[...sign-up]]/page.tsx', 'utf8');
   assert.match(provider, /<ClerkProvider\s+signInUrl="\/sign-in"\s+signUpUrl="\/sign-up"\s+afterSignOutUrl="\/sign-in">/);
-  assert.match(root, /<RedirectToSignIn\s*\/>/);
+  assert.match(root, /router\.replace\("\/sign-in"\)/);
+  assert.doesNotMatch(root, /RedirectToSignIn/);
   assert.doesNotMatch(root, /routing="hash"/);
   assert.match(signInRoute, /<SignIn\s+path="\/sign-in"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);
   assert.match(signUpRoute, /<SignUp\s+path="\/sign-up"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);

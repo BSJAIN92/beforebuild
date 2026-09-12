@@ -1,16 +1,23 @@
 "use client";
-import { RedirectToSignIn, useAuth, useClerk } from "@clerk/nextjs";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import type { Viewer } from "../lib/backend";
 import { DemoWorkspace, LiveWorkspace } from "./Workspace";
 function Brand() { return <div className="auth-brand"><span className="brand-mark">✳</span>beforebuild.</div>; }
+function CleanSignInRedirect() {
+  const router = useRouter();
+  useEffect(() => { router.replace("/sign-in"); }, [router]);
+  return <div className="auth-loading">Opening sign in…</div>;
+}
 function Connected() {
   const { isLoaded, isSignedIn } = useAuth(); const { signOut } = useClerk();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const access = useQuery(api.access.me, isAuthenticated ? {} : "skip") as { allowed: boolean; reason: string; viewer: Viewer | null } | undefined;
   if (!isLoaded) return <div className="auth-loading">Checking your session…</div>;
-  if (!isSignedIn) return <RedirectToSignIn />;
+  if (!isSignedIn) return <CleanSignInRedirect />;
   if (isLoading) return <div className="auth-loading">Connecting to your private workspace…</div>;
   if (!isAuthenticated) return <main className="auth-shell"><div className="auth-card"><Brand /><h1>The workspace couldn’t verify your session.</h1><p>Ask the beta owner to check the Clerk–Convex integration, including the issuer domain and token audience.</p><button className="button secondary" onClick={() => signOut({ redirectUrl: "/sign-in" })}>Sign out</button></div></main>;
   if (!access) return <div className="auth-loading">Checking beta access…</div>;
