@@ -46,6 +46,13 @@ test('Research sources come from native URL annotations, not model-invented link
   const response = { id: 'resp_example', status: 'completed', output: [{ content: [{ type: 'output_text', text: 'Evidence [1] and [2].', annotations: [{ type: 'url_citation', url: 'https://example.com/pricing', title: 'Actual pricing', start_index: 9, end_index: 12 }, { type: 'url_citation', url: 'https://example.com/pricing', title: 'Duplicate', start_index: 17, end_index: 20 }, { type: 'url_citation', url: 'javascript:alert(1)', title: 'Unsafe' }] }] }] };
   const result = researchReport(response, 'advanced'); assert.equal(result.sources.length, 1); assert.equal(result.demo, false); assert.ok(result.text.includes('[Actual pricing](https://example.com/pricing)')); assert.equal(result.kind, 'advanced');
 });
+test('Provider response IDs are not exposed through report or source IDs', () => {
+  const providerId = 'resp_PRIVATE_CORRELATION_123456789';
+  const response = { id: providerId, status: 'completed', output: [{ content: [{ type: 'output_text', text: 'Evidence.', annotations: [{ type: 'url_citation', url: 'https://example.com/evidence', title: 'Evidence', start_index: 0, end_index: 9 }] }] }] };
+  const result = researchReport(response, 'intermediate');
+  assert.equal(result.id.includes(providerId), false);
+  assert.equal(result.sources.some(source => source.id.includes(providerId) || providerId.includes(source.id)), false);
+});
 test('Source-free research fails closed rather than masquerading as evidence', () => {
   assert.throws(() => researchReport({ id: 'resp_fake', status: 'completed', output: [{ content: [{ type: 'output_text', text: '[made-up](https://example.com)' }] }] }, 'intermediate'), /no verifiable source/);
 });

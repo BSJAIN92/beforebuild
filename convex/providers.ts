@@ -1,6 +1,6 @@
 "use node";
 import { interviewInstructions, parseTurn, TURN_SCHEMA, type Turn } from "../lib/ai-contract";
-import { safeUrl, type Idea, type ResearchReport, type Source } from "../lib/model";
+import { safeUrl, uid, type Idea, type ResearchReport, type Source } from "../lib/model";
 export interface ProviderResponse {
   id: string;
   status: "queued" | "in_progress" | "completed" | "failed" | "cancelled" | "incomplete";
@@ -99,7 +99,7 @@ export function researchReport(response: ProviderResponse, kind: "intermediate" 
       const url = safeUrl(annotation.url); if (!url) continue;
       let source = urls.get(url);
       if (!source) {
-        source = { id: `src-${response.id.slice(-24)}-${sources.length + 1}`, url, title: (annotation.title || new URL(url).hostname).slice(0, 350), accessedAt: Date.now() };
+        source = { id: uid(), url, title: (annotation.title || new URL(url).hostname).slice(0, 350), accessedAt: Date.now() };
         urls.set(url, source); sources.push(source);
       }
       if (Number.isInteger(annotation.start_index) && Number.isInteger(annotation.end_index) && annotation.start_index! >= 0 && annotation.end_index! <= text.length && annotation.end_index! >= annotation.start_index!) {
@@ -115,5 +115,5 @@ export function researchReport(response: ProviderResponse, kind: "intermediate" 
     parts.push(text);
   }
   if (!sources.length) throw new Error("The research returned no verifiable source citations. No findings were saved as evidence. Please retry.");
-  return { id: `report-${response.id}`, kind, text: parts.join("\n\n").slice(0, 110000), sources: sources.slice(0, 80), createdAt: Date.now(), demo: false };
+  return { id: uid(), kind, text: parts.join("\n\n").slice(0, 110000), sources: sources.slice(0, 80), createdAt: Date.now(), demo: false };
 }
