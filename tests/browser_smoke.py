@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'dist' / 'qa'
 OUT.mkdir(parents=True, exist_ok=True)
-HTML = (ROOT / 'dist' / 'beforebuild-demo.html').read_text()
+HTML = (ROOT / 'dist' / 'beforebuild-demo.html').read_text(encoding='utf-8')
 results = []
 errors = []
 requests = []
@@ -30,6 +30,21 @@ with sync_playwright() as p:
     page.evaluate("""() => { const store = new Map(); Object.defineProperty(window, 'localStorage', { value: {getItem: k => store.get(k) ?? null, setItem: (k,v) => store.set(k,v), removeItem: k => store.delete(k)} }); }""")
     page.set_content(HTML, wait_until='domcontentloaded')
     check('Home has exactly three tier choices', page.locator('.tier-card').count() == 3)
+    start = page.locator('#new-idea-form .start-button')
+    raw = page.locator('#raw-idea')
+    check('New idea button starts disabled', start.is_disabled())
+    raw.fill('x' * 19)
+    check('Nineteen trimmed characters remain invalid', start.is_disabled() and '19 / 5,000' in page.locator('#idea-guidance').inner_text())
+    raw.fill('x' * 20)
+    check('Twenty trimmed characters enable creation', start.is_enabled() and '20 / 5,000' in page.locator('#idea-guidance').inner_text())
+    raw.fill('  ' + ('x' * 20) + '  ')
+    check('Character count ignores surrounding spaces', start.is_enabled() and '20 / 5,000' in page.locator('#idea-guidance').inner_text())
+    raw.fill('x' * 5000)
+    check('Five thousand characters remain valid', start.is_enabled() and '5,000 / 5,000' in page.locator('#idea-guidance').inner_text())
+    raw.evaluate("el => el.removeAttribute('maxlength')")
+    raw.fill('x' * 5001)
+    check('More than five thousand characters are rejected', start.is_disabled() and '5,001 / 5,000' in page.locator('#idea-guidance').inner_text())
+    raw.fill('')
     page.screenshot(path=str(OUT / 'home-desktop.png'), full_page=True)
     page.locator('[data-action="sample"]').click()
     check('Sample opens a traditional nine-block canvas', page.locator('.canvas-block').count() == 9)
@@ -49,6 +64,7 @@ with sync_playwright() as p:
         page.locator('#chat-form button[type="submit"]').click()
         page.wait_for_timeout(520)
     check('Basic conversation completes with all nine populated sections', page.locator('.canvas-block.has-content').count() == 9 and page.locator('.complete-note').count() == 1)
+    check('Live canvas body text is at least 12px', float(page.locator('.canvas-item p').first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 12)
     check('Founder edit survives subsequent turns', 'Less awkward invoice follow-up' in page.locator('.block-value').inner_text())
     page.locator('[data-action="tab"][data-tab="assumptions"]').click()
     page.locator('[data-action="decide"][data-decision="decline"]').first.click()
@@ -59,13 +75,19 @@ with sync_playwright() as p:
     check('Completed experiment is saved', '1 of 3' in page.locator('.validation-progress').inner_text())
     # Both download paths, inspect actual bytes.
     page.locator('[data-action="export"]').click()
+    with page.expect_popup() as popup_info:
+        page.locator('[data-action="print"]').click()
+    report = popup_info.value
+    report.wait_for_load_state('domcontentloaded')
+    check('Print report has designed sections instead of raw Markdown', report.locator('.report .canvas .block').count() == 9 and report.locator('pre').count() == 0 and report.locator('.section-title').count() >= 4)
+    report.close()
     for action, suffix in [('export-json', '.json'), ('export-md', '.md')]:
         with page.expect_download() as info:
             page.locator('[data-action="'+action+'"]').click()
         download = info.value
         path = OUT / ('export' + suffix)
         download.save_as(str(path))
-        content = path.read_text()
+        content = path.read_text(encoding='utf-8')
         check('Download ' + suffix + ' contains actual saved content', 'Less awkward invoice follow-up' in content and 'Validation' in content if suffix == '.md' else json.loads(content)['idea']['title'] == 'Nudge — designer edition')
     page.locator('dialog [data-action="close-dialog"]').click()
     # Upgrade keeps the same record and previous work.
@@ -133,5 +155,5 @@ with sync_playwright() as p:
     browser.close()
 
 report = {'checks_passed':len(results), 'checks':results, 'page_errors':errors, 'network_requests':requests, 'scope':'Standalone UI only; mocked browser storage. No live service integration tested.'}
-(OUT / 'browser-results.json').write_text(json.dumps(report, indent=2))
+(OUT / 'browser-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print(json.dumps(report, indent=2))

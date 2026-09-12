@@ -112,11 +112,11 @@ export function createDemoBackend(): Backend {
   return {
     snapshot: () => ({ ...data, storageAvailable: !persistenceError }),
     subscribe(fn) { listeners.add(fn); if (persistenceError) console.warn("Local persistence is unavailable. Export your work before closing this tab."); return () => listeners.delete(fn); },
-    async create(description, tier, consent) {
+    async create(description, tier, _aiConsent, researchConsent) {
       if (description.trim().length < 20) throw new Error("Give us at least 20 characters about the person, problem, or idea.");
       if (description.length > 5000) throw new Error("Keep the initial idea under 5,000 characters.");
-      if (tier !== "basic" && !consent) throw new Error("Please allow AI-led web research for this level.");
-      const idea = createIdea(description, tier, consent); data.ideas.unshift(idea); emit(); return idea.id;
+      if (tier !== "basic" && !researchConsent) throw new Error("Please allow AI-led web research for this level.");
+      const idea = createIdea(description, tier, researchConsent, undefined, false); data.ideas.unshift(idea); emit(); return idea.id;
     },
     async send(id, text, finish = false) {
       const idea = get(id); if (isBusy(idea)) throw new Error("A response is already being prepared.");

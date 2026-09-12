@@ -22,14 +22,15 @@ export const list = query({ args: {}, handler: async ctx => {
   const rows = await ctx.db.query("ideas").withIndex("by_owner", q => q.eq("owner", viewer.owner)).order("desc").take(limit("AI_MAX_IDEAS", 30, 30));
   return rows.map(decode); // Never return provider response IDs, ownership metadata, or run tokens.
 } });
-export const create = mutation({ args: { description: v.string(), tier: tierValidator, consent: v.boolean() }, handler: async (ctx, args) => {
+export const create = mutation({ args: { description: v.string(), tier: tierValidator, aiConsent: v.boolean(), researchConsent: v.boolean() }, handler: async (ctx, args) => {
   const viewer = await requireViewer(ctx); const description = args.description.trim();
   if (description.length < 20 || description.length > 5000) throw new ConvexError("Describe your idea in 20–5,000 characters.");
   requireFreeBeta(args.tier);
-  if (args.tier !== "basic" && !args.consent) throw new ConvexError("This level needs your consent to AI-led web research.");
+  if (!args.aiConsent) throw new ConvexError("Please agree to AI processing before starting.");
+  if (args.tier !== "basic" && !args.researchConsent) throw new ConvexError("This level needs your consent to AI-led web research.");
   const max = limit("AI_MAX_IDEAS", 30, 30);
   if ((await ctx.db.query("ideas").withIndex("by_owner", q => q.eq("owner", viewer.owner)).take(max)).length >= max) throw new ConvexError(`The beta limit is ${max} saved ideas. Export and remove an old idea to add another.`);
-  const idea = createIdea(description, args.tier, args.consent);
+  const idea = createIdea(description, args.tier, args.researchConsent, undefined, args.aiConsent);
   const id = await ctx.db.insert("ideas", { owner: viewer.owner, email: viewer.email, title: idea.title, updatedAt: idea.updatedAt, document: encode(idea) });
   idea.id = id; await ctx.db.patch(id, { document: encode(idea) }); return id;
 } });

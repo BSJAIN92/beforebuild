@@ -36,7 +36,7 @@ export interface Idea {
   createdAt: number; updatedAt: number; status: Status; statusLabel: string;
   messages: Message[]; canvas: Canvas; challenges: Challenge[]; experiments: Experiment[];
   reports: ResearchReport[]; answerCount: number; question: string; questionHint: string;
-  suggestions: string[]; summary: string; error: string; researchConsent: boolean;
+  suggestions: string[]; summary: string; error: string; aiConsent: boolean; researchConsent: boolean;
 }
 export interface TierConfig { label: string; min: number; max: number; description: string; research: string; }
 export const TIERS: Record<Tier, TierConfig> = {
@@ -52,11 +52,11 @@ export function uid(): string {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 export function makeMessage(role: Message["role"], text: string): Message { return { id: uid(), role, text, createdAt: Date.now() }; }
-export function createIdea(description: string, tier: Tier, researchConsent: boolean, id = uid()): Idea {
+export function createIdea(description: string, tier: Tier, researchConsent: boolean, id = uid(), aiConsent = true): Idea {
   const now = Date.now();
   const title = description.trim().split(/\s+/).slice(0, 7).join(" ");
   const question = "Who is the very first kind of person you would help, and what frustrating task are they trying to get done?";
-  return { id, title, description: description.trim(), tier, researchConsent, createdAt: now, updatedAt: now,
+  return { id, title, description: description.trim(), tier, aiConsent, researchConsent, createdAt: now, updatedAt: now,
     status: "draft", statusLabel: "Let’s find the problem worth solving", canvas: emptyCanvas(),
     messages: [makeMessage("user", description.trim()), makeMessage("assistant", "Let’s start with the person, not the product. We’ll shape the business together, one question at a time.\n\n" + question)],
     challenges: [], experiments: [], reports: [], answerCount: 0, question,
@@ -78,6 +78,9 @@ export function normalizeEmail(email: string): string { return email.trim().toLo
 export function cleanError(error: unknown): string {
   if (error instanceof Error) {
     const message = error.message.replace(/\[CONVEX[^\]]*\]\s*/g, "").replace(/Uncaught (ConvexError|Error):\s*/g, "");
+    if (/OPENAI_API_KEY|AI service is not configured|credentials or model permissions|provider configuration/i.test(message)) {
+      return "The AI service is temporarily unavailable. Your work is saved. Please try again later.";
+    }
     return message.split("\n")[0].slice(0, 350);
   }
   return "Something went wrong. Your last saved work is safe. Please try again.";

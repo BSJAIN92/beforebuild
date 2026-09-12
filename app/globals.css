@@ -17,3 +17,28 @@
 /* Reading comfort: labels remain secondary without becoming faint. */
 .home-intro>p,.topbar-title{color:#697561}.tier-desc{color:#758168;font-size:10px}.tier-detail{color:#6e7b60;font-size:9px}.tier-free{color:#5e734a;font-size:9px}.input-corner,.example-prompts>span{color:#7a866c}.what-you-get p span{color:#7a8968;font-size:11px}.what-you-get p strong{color:#60754c;font-size:11px}.what-you-get h3{color:#526b41}.form-footer>p{color:#738365}.nav-empty{color:#829074}.message-content{font-size:12px;color:#4d6240}.message-user .message-content{color:#566d47}.message-assistant .message-content.latest p:last-child{color:#344d29}.messages{scroll-behavior:auto}.message-label{color:#71845d;font-size:8px}.chat-heading span:not(.online-dot){color:#839570}.chat-composer textarea{font-size:12px}.chat-composer textarea::placeholder{color:#899a76}.answer-help,.unsure-button{color:#718758}.composer-bottom{color:#71845c}.canvas-item p{font-size:11px;color:#61744e}.canvas-item.assumption p{color:#88764f}.canvas-item.research p{color:#537783}.block-heading>span:first-child{font-size:10px;color:#5c7843}.block-value .block-heading>span:first-child{color:#527033}.empty-block{font-size:10px;color:#8a9a74}.empty-block>span{color:#9fac8a;font-size:9px}.legend>span{color:#758961;font-size:9px}.canvas-top p{color:#7b8f64;font-size:11px}.canvas-bottom-note{color:#809268;font-size:10px}.canvas-summary p{font-size:12px;color:#71865b}.output-tab{color:#809567}.output-tab.active{color:#476d2e}.panel-intro p{font-size:12px;color:#748c5c}.challenge-card>p,.suggested-test p{font-size:12px;color:#74885e}.experiment-card dd{font-size:12px;color:#748a5c}.experiment-card dt{color:#667f4c;font-size:10px}.research-body{color:#6b8354}.research-upsell p{color:#7a8e64}.guide-steps p,.guide-trust p,.guide-levels p,.integration-note p{color:#73885b}.settings-card .section-header p,.settings-page>p{color:#7b8e64}.dialog-lead{color:#71845e}.field-help,.consent{color:#7e8e6a}.idea-card-main>p{color:#82936d}.pill.green{color:#637f48}.pill.neutral{color:#7d8d6b}.workspace-demo-note{color:#8b774e}.notice.warning{color:#8e774e}.canvas-block{min-height:150px}.block-value .canvas-item{background:#f0f5e5}.block-value .canvas-item.assumption{background:#f7f3e7}
 @media(max-width:680px){.tier-desc{font-size:9px}.tier-detail{font-size:8px}.tier-free{font-size:8px}.canvas-top p{font-size:10px}.legend>span{font-size:8px}.message-content{font-size:12px}.output-tab{font-size:9px}.canvas-item p{font-size:11px}.canvas-block{min-height:165px}}
+
+/* Step 8 readability and consent improvements. Sidebar sizing intentionally stays unchanged. */
+.idea-guidance{display:flex;justify-content:space-between;gap:16px;margin-top:7px;font-size:11px;line-height:1.5;color:#687b62}
+.idea-guidance strong{white-space:nowrap;font-variant-numeric:tabular-nums;color:#506b4d}
+.idea-guidance.invalid,.idea-guidance.invalid strong{color:#a0443c}
+.consent{font-size:12px;line-height:1.6;align-items:flex-start}
+.consent input{margin-top:2px}
+.research-consent{margin-top:8px;padding-left:25px}
+.demo-consent-note{margin-top:16px}
+.message-content{font-size:13px;line-height:1.75}
+.chat-composer textarea{font-size:13px;line-height:1.6}
+.canvas-top p{font-size:13px;line-height:1.6}
+.legend>span{font-size:11px}
+.block-heading>span:first-child{font-size:12px;line-height:1.45}
+.canvas-item p{font-size:12px;line-height:1.65;color:#526446}
+.canvas-item.assumption p{color:#796b48}
+.canvas-item.research p{color:#456f77}
+.empty-block{font-size:11px;line-height:1.65;color:#7f8e6d}
+.empty-block>span{font-size:10px;color:#8e9c7d}
+.inline-source{font-size:10px}
+.edited-note{font-size:9px}
+.canvas-bottom-note{font-size:11px}
+.canvas-summary p,.panel-intro p,.challenge-card>p,.suggested-test p,.experiment-card dd{font-size:13px}
+.experiment-card dt,.suggested-test strong{font-size:11px}
+@media(max-width:680px){.idea-guidance{font-size:10px}.consent{font-size:11px}.research-consent{padding-left:0}.canvas-grid{min-width:760px}.block-heading>span:first-child{font-size:12px}.canvas-item p{font-size:12px}.empty-block{font-size:11px}.legend>span{font-size:10px}.canvas-top p{font-size:12px}}

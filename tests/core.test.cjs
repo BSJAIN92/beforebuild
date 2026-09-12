@@ -1,6 +1,6 @@
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, TIERS } = require('../.test-build/lib/model.js');
+const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, cleanError, TIERS } = require('../.test-build/lib/model.js');
 const { demoTurn, createDemoBackend } = require('../.test-build/lib/demo.js');
 const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
 const { toMarkdown } = require('../.test-build/lib/export.js');
@@ -79,9 +79,19 @@ test('demo persists multiple ideas, upgrades preserve the same record and manual
   const restored = createDemoBackend().snapshot().ideas[0]; assert.equal(restored.id, id); assert.equal(restored.tier, 'intermediate'); assert.equal(restored.title, 'Chosen name'); assert.equal(restored.canvas.value[0].text, 'A founder edit');
   await assert.rejects(() => backend.upgrade(id, 'basic', false), /deeper level/);
 });
+test('AI and research consent are recorded separately', () => {
+  const basic = createIdea(description, 'basic', false, 'basic-id', true);
+  const research = createIdea(description, 'advanced', true, 'research-id', true);
+  assert.equal(basic.aiConsent, true); assert.equal(basic.researchConsent, false);
+  assert.equal(research.aiConsent, true); assert.equal(research.researchConsent, true);
+});
 test('research consent and input bounds are enforced in demo operations', async () => {
-  const b = createDemoBackend(); await assert.rejects(() => b.create(description, 'advanced', false), /allow AI-led/);
-  await assert.rejects(() => b.create('tiny', 'basic', false), /20 characters/);
+  const b = createDemoBackend(); await assert.rejects(() => b.create(description, 'advanced', false, false), /allow AI-led/);
+  await assert.rejects(() => b.create('tiny', 'basic', false, false), /20 characters/);
+});
+test('configuration details are removed from tester-facing AI errors', () => {
+  assert.equal(cleanError(new Error('The AI service is not configured. Ask the beta owner to set OPENAI_API_KEY on Convex.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
+  assert.equal(cleanError(new Error('The AI service rejected its credentials or model permissions. Ask the beta owner to check the provider configuration.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
 });
 test('cancel prevents a delayed demo response from overwriting the saved idea', async () => {
   const b = createDemoBackend(); const id = await b.create(description, 'basic', false); const pending = b.send(id, 'Freelancers');

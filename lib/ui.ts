@@ -26,7 +26,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
   let selectedId: string | null = null;
   let tab: "canvas" | "assumptions" | "research" | "validation" = "canvas";
   let mobileTab = "chat"; let navOpen = false; let draft = ""; let rawIdea = "";
-  let selectedTier: Tier = "basic"; let consent = false; let toast = "";
+  let selectedTier: Tier = "basic"; let aiConsent = false; let researchConsent = false; let toast = "";
   let destroyed = false; let sending = false; let toastTimer: ReturnType<typeof setTimeout> | undefined;
   const current = () => snapshot.ideas.find(i => i.id === selectedId);
   const button = (label: string, action: string, cls = "button secondary", attributes = "") => `<button class="${cls}" data-action="${action}" ${attributes}>${label}</button>`;
@@ -60,13 +60,25 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
       <strong>${TIERS[t].label}</strong><span class="tier-desc">${TIERS[t].description}</span><span class="tier-detail">${TIERS[t].min}–${TIERS[t].max} questions${t === "basic" ? " · No research" : t === "intermediate" ? " · Web research" : " · Deep research"}</span><span class="tier-free">${t === "basic" ? "Always free" : "Free during beta"}</span></button>`).join("")}</div>`;
   }
   function newIdeaForm() {
+    const ideaLength = rawIdea.trim().length;
+    const ideaValid = ideaLength >= 20 && ideaLength <= 5000;
+    const consentValid = snapshot.viewer.demo || (aiConsent && (selectedTier === "basic" || researchConsent));
     return `<form id="new-idea-form" class="new-idea-form"><div class="input-heading"><span class="step-number">01</span><label for="raw-idea">What are you thinking about?</label><span>Rough is good.</span></div>
-      <div class="idea-input-wrap"><textarea id="raw-idea" name="idea" maxlength="5000" rows="4" placeholder="I’m thinking of building a tool that helps [someone] with [a problem]…" required>${e(rawIdea)}</textarea><span class="input-corner">No pitch deck required ${icon("spark", 13)}</span></div>
+      <div class="idea-input-wrap"><textarea id="raw-idea" name="idea" minlength="20" maxlength="5000" rows="4" aria-describedby="idea-guidance" placeholder="I’m thinking of building a tool that helps [someone] with [a problem]…" required>${e(rawIdea)}</textarea><span class="input-corner">No pitch deck required ${icon("spark", 13)}</span></div>
+      <div id="idea-guidance" class="idea-guidance ${ideaLength && !ideaValid ? "invalid" : ""}"><span>Use 20–5,000 characters so there is enough context to begin.</span><strong><span id="idea-character-count">${ideaLength.toLocaleString()}</span> / 5,000</strong></div>
       <div class="example-prompts"><span>Try a starting point:</span>${button("A micro-SaaS idea", "prompt", "prompt-chip", 'type="button" data-prompt="A tool that helps independent consultants turn meeting notes into follow-up proposals without starting from scratch."')}${button("A niche service", "prompt", "prompt-chip", 'type="button" data-prompt="A service that helps small neighborhood cafés set up a simple loyalty program their customers actually use."')}</div>
       <div class="input-heading depth-heading"><span class="step-number">02</span><label>How deep do you want to go?</label></div>
       ${tiers()}
-      ${selectedTier !== "basic" ? `<label class="consent"><input id="research-consent" type="checkbox" ${consent ? "checked" : ""} required><span>I agree to share my idea and relevant answers with the AI provider for web research. I won’t include secrets or personal customer data.</span></label>` : ""}
-      <div class="form-footer"><p>${icon("shield", 15)} ${snapshot.viewer.demo ? "Demo ideas stay in this browser." : "Your ideas stay in your private workspace."}</p><button class="button primary start-button" type="submit" ${sending ? "disabled" : ""}>${sending ? "Creating…" : "Let’s explore this idea"} ${icon("arrow", 18)}</button></div></form>`;
+      ${snapshot.viewer.demo ? `<div class="notice demo-consent-note">This scripted demo stays in your browser and does not contact an AI provider or the web.</div>` : `<label class="consent"><input id="ai-consent" type="checkbox" ${aiConsent ? "checked" : ""} required><span>I agree to share my idea and relevant answers with the AI provider to generate this conversation. I won’t include secrets or personal customer data.</span></label>${selectedTier !== "basic" ? `<label class="consent research-consent"><input id="research-consent" type="checkbox" ${researchConsent ? "checked" : ""} required><span>I also agree that AI-led research may create public web queries from this context.</span></label>` : ""}`}
+      <div class="form-footer"><p>${icon("shield", 15)} ${snapshot.viewer.demo ? "Demo ideas stay in this browser." : "Your ideas stay in your private workspace."}</p><button class="button primary start-button" type="submit" ${sending || !ideaValid || !consentValid ? "disabled" : ""}>${sending ? "Creating…" : "Let’s explore this idea"} ${icon("arrow", 18)}</button></div></form>`;
+  }
+  function updateNewIdeaValidity() {
+    const form = root.querySelector<HTMLFormElement>("#new-idea-form"); if (!form) return;
+    const length = rawIdea.trim().length; const ideaValid = length >= 20 && length <= 5000;
+    const consentValid = snapshot.viewer.demo || (aiConsent && (selectedTier === "basic" || researchConsent));
+    const count = form.querySelector("#idea-character-count"); if (count) count.textContent = length.toLocaleString();
+    form.querySelector("#idea-guidance")?.classList.toggle("invalid", length > 0 && !ideaValid);
+    const submit = form.querySelector<HTMLButtonElement>(".start-button"); if (submit) submit.disabled = sending || !ideaValid || !consentValid;
   }
   function home() {
     return `<main class="home-page page"><div class="home-intro"><div class="eyebrow"><span class="small-line"></span> A LITTLE CLARITY BEFORE A LOT OF CODE</div><h1>Your next idea deserves<br>a <em>better beginning.</em></h1><p>Turn a rough idea into a business worth testing.<br class="desktop-break"> No business degree. No blank canvas. Just a good conversation.</p></div>
@@ -155,7 +167,14 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
   }
   function printIdea(i: Idea) {
     const w = window.open("", "_blank"); if (!w) { notify("Allow pop-ups to open the print view, or export Markdown instead."); return; }
-    w.document.write(`<!doctype html><html><head><title>${e(i.title)} · BeforeBuild</title><style>body{font:14px/1.7 system-ui;max-width:900px;margin:40px auto;color:#263a33;padding:20px}h1{font-size:30px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}button{padding:10px 20px;margin-bottom:20px}@media print{button{display:none}body{margin:0}a{color:inherit}}</style></head><body><button onclick="window.print()">Print / save as PDF</button><pre>${e(toMarkdown(i))}</pre></body></html>`); w.document.close();
+    const evidence = (value: CanvasItem["evidence"]) => value === "founder" ? "Founder input" : value === "research" ? "Research" : "Assumption";
+    const blocks = BLOCKS.map(b => `<section class="block"><h3>${e(b.label)}</h3>${i.canvas[b.key].length ? `<ul>${i.canvas[b.key].map(item => `<li><span class="tag ${item.evidence}">${e(evidence(item.evidence))}</span>${e(item.text)}</li>`).join("")}</ul>` : '<p class="empty">Not yet explored.</p>'}</section>`).join("");
+    const challenges = i.challenges.length ? i.challenges.map(c => `<article><h3>${e(c.title)}</h3><p>${e(c.detail)}</p><p class="callout"><strong>Suggested test:</strong> ${e(c.test)}</p><small>Priority: ${e(c.severity)} · Decision: ${e(c.decision)}</small></article>`).join("") : '<p class="empty">No challenges recorded yet.</p>';
+    const experiments = i.experiments.length ? i.experiments.map(x => `<article><h3>${x.done ? "✓ " : ""}${e(x.title)}</h3><p><strong>Hypothesis:</strong> ${e(x.hypothesis)}</p><p><strong>Action:</strong> ${e(x.steps)}</p><p class="callout"><strong>Decision threshold:</strong> ${e(x.metric)}</p><small>Priority: ${e(x.priority)} · Effort: ${e(x.effort)}</small></article>`).join("") : '<p class="empty">No experiments recorded yet.</p>';
+    const sources = i.reports.flatMap(r => r.sources).map(s => { const url = safeUrl(s.url); return url ? `<li><a href="${e(url)}">${e(s.title)}</a><small>${e(new URL(url).hostname)}</small></li>` : ""; }).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${e(i.title)} · BeforeBuild</title><style>
+      :root{color:#263a33;background:#eef2e9;font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;color:#263a33}.report{max-width:980px;margin:32px auto;background:#fff;padding:48px 54px;box-shadow:0 8px 30px #23332618}.brand{color:#52784f;font-weight:750;letter-spacing:-.02em}.hero{border-bottom:3px solid #dce8d5;padding-bottom:24px;margin-bottom:28px}.eyebrow{font-size:11px;letter-spacing:.14em;color:#71836d;text-transform:uppercase}.hero h1{font-size:34px;line-height:1.15;margin:8px 0 10px}.meta{color:#68766a;font-size:13px}.notice{background:#f4f7ef;border-left:4px solid #75906b;padding:14px 16px;margin:22px 0;font-size:13px}.section-title{font-size:22px;margin:34px 0 15px;color:#37523b;break-after:avoid}.lead{font-size:16px}.canvas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.block,article{border:1px solid #dfe8da;border-radius:9px;padding:16px;break-inside:avoid;background:#fcfdf9}.block h3,article h3{font-size:15px;margin:0 0 10px;color:#496648}.block ul{padding:0;margin:0;list-style:none}.block li{font-size:13px;margin:9px 0;line-height:1.55}.tag{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:0 7px 3px 0;padding:2px 5px;border-radius:3px;background:#edf3e7;color:#557050}.tag.research{background:#e8f1f2;color:#416d74}.tag.assumption{background:#f6f0df;color:#7a6539}.cards{display:grid;gap:10px}.cards article p{font-size:13px;margin:7px 0}.callout{background:#f3f7ee;padding:9px 10px;border-radius:5px}.empty,small{color:#748078;font-size:12px}.sources{padding-left:20px}.sources li{margin:8px 0}.sources small{display:block}.print-button{display:block;margin:20px auto 0;padding:10px 18px;border:0;border-radius:7px;background:#52784f;color:#fff;font:600 14px system-ui;cursor:pointer}a{color:#3f7180;overflow-wrap:anywhere}@page{size:A4;margin:14mm}@media print{:root{background:#fff;font-size:11pt}.report{max-width:none;margin:0;padding:0;box-shadow:none}.print-button{display:none}.hero h1{font-size:25pt}.section-title{font-size:16pt}.canvas{gap:8px}.block,article{padding:11px}.block li,.cards article p{font-size:10pt}a{color:inherit;text-decoration:underline}}@media(max-width:650px){.report{margin:0;padding:28px 20px;box-shadow:none}.canvas{grid-template-columns:1fr}}
+    </style></head><body><button class="print-button" onclick="window.print()">Print / save as PDF</button><main class="report"><header class="hero"><div class="brand">beforebuild.</div><div class="eyebrow">Business model draft</div><h1>${e(i.title)}</h1><div class="meta">${e(TIERS[i.tier].label)} level · Updated ${e(new Date(i.updatedAt).toLocaleDateString())}</div></header><div class="notice">This is a business model draft, not proof of demand. Founder input is self-reported; assumptions still need testing.</div><section><h2 class="section-title">Original idea</h2><p class="lead">${e(i.description)}</p></section><section><h2 class="section-title">Summary</h2><p>${e(i.summary || "Still taking shape.")}</p></section><section><h2 class="section-title">Business model canvas</h2><div class="canvas">${blocks}</div></section><section><h2 class="section-title">Assumptions and challenges</h2><div class="cards">${challenges}</div></section><section><h2 class="section-title">Validation plan</h2><div class="cards">${experiments}</div></section>${sources ? `<section><h2 class="section-title">Sources</h2><ol class="sources">${sources}</ol></section>` : ""}</main></body></html>`); w.document.close();
   }
   async function onClick(event: Event) {
     if ((event.target as Element).closest("a")) return;
@@ -207,9 +226,13 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
       if (form.id === "new-idea-form") {
         if (sending) return;
         rawIdea = (form.querySelector("#raw-idea") as HTMLTextAreaElement).value;
-        consent = !!(form.querySelector("#research-consent") as HTMLInputElement)?.checked;
+        aiConsent = snapshot.viewer.demo || !!(form.querySelector("#ai-consent") as HTMLInputElement)?.checked;
+        researchConsent = !!(form.querySelector("#research-consent") as HTMLInputElement)?.checked;
+        const length = rawIdea.trim().length;
+        if (length < 20 || length > 5000) { updateNewIdeaValidity(); return; }
+        if (!snapshot.viewer.demo && (!aiConsent || (selectedTier !== "basic" && !researchConsent))) { updateNewIdeaValidity(); return; }
         sending = true;
-        try { selectedId = await backend.create(rawIdea, selectedTier, consent); rawIdea = ""; draft = ""; tab = "canvas"; mobileTab = "chat"; } finally { sending = false; render(); }
+        try { selectedId = await backend.create(rawIdea, selectedTier, aiConsent, researchConsent); rawIdea = ""; draft = ""; tab = "canvas"; mobileTab = "chat"; aiConsent = false; researchConsent = false; } finally { sending = false; render(); }
       } else if (form.id === "chat-form" && i) {
         const answer = (form.querySelector("textarea") as HTMLTextAreaElement).value.trim(); if (!answer) return;
         draft = ""; (form.querySelector("textarea") as HTMLTextAreaElement).value = ""; const sendButton = form.querySelector<HTMLButtonElement>(".send-button"); if (sendButton) sendButton.disabled = true; try { await backend.send(i.id, answer); } catch (error) { draft = answer; throw error; }
@@ -233,9 +256,10 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
   }
   function onInput(event: Event) {
     const input = event.target as HTMLInputElement;
-    if (input.id === "raw-idea") rawIdea = input.value;
+    if (input.id === "raw-idea") { rawIdea = input.value; updateNewIdeaValidity(); }
     if (input.id === "chat-input") { draft = input.value; const send = root.querySelector<HTMLButtonElement>(".send-button"); if (send) send.disabled = !draft.trim(); }
-    if (input.id === "research-consent") consent = input.checked;
+    if (input.id === "ai-consent") { aiConsent = input.checked; updateNewIdeaValidity(); }
+    if (input.id === "research-consent") { researchConsent = input.checked; updateNewIdeaValidity(); }
     if (input.id === "idea-search") root.querySelectorAll<HTMLElement>(".library-grid .idea-card").forEach(card => { card.hidden = !card.dataset.search?.includes(input.value.toLowerCase()); });
   }
   function onKeydown(event: KeyboardEvent) {

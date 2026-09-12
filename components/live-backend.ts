@@ -10,7 +10,7 @@ export function createLiveBackend(client: ConvexReactClient, viewer: Viewer, sig
     snapshot: () => data,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     push(next) { data = next; listeners.forEach(listener => listener()); },
-    async create(description, tier, consent) { const id = await client.mutation(api.ideas.create, { description, tier, consent }) as string; data = { ...data, ideas: await client.query(api.ideas.list, {}) }; listeners.forEach(listener => listener()); return id; },
+    async create(description, tier, aiConsent, researchConsent) { const id = await client.mutation(api.ideas.create, { description, tier, aiConsent, researchConsent }) as string; data = { ...data, ideas: await client.query(api.ideas.list, {}) }; listeners.forEach(listener => listener()); return id; },
     async send(id, text, finish = false) { await client.mutation(api.ideas.send, { id: ideaId(id), text, finish }); },
     async editBlock(id, block, items) { await client.mutation(api.ideas.editBlock, { id: ideaId(id), block, items }); },
     async rename(id, title) { await client.mutation(api.ideas.rename, { id: ideaId(id), title }); },

@@ -39,6 +39,8 @@ export const work = internalAction({ args: { id: v.id("ideas"), token: v.string(
     const turn = await ai.interview(idea, state.finish);
     await ctx.runMutation(internal.jobs.complete, { ...args, turnJson: JSON.stringify(turn) });
   } catch (error) {
+    const internalMessage = error instanceof Error ? error.message.split("\n")[0].slice(0, 350) : "Unknown AI worker failure";
+    console.error("AI worker failed", { name: error instanceof Error ? error.name : "UnknownError", message: internalMessage });
     const message = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError") ? "The AI service timed out. Your answer is saved. Retry to continue; the previous provider request may still incur usage." : cleanError(error);
     await ctx.runMutation(internal.jobs.fail, { ...args, error: message });
     if (responseToClean) { try { const ai = provider(); await ai.cancel(responseToClean).catch(() => {}); await ai.remove(responseToClean).catch(() => {}); } catch { /* Credentials can fail during cleanup; never replace the original error. */ } }
