@@ -96,12 +96,12 @@ Update this table immediately after every approved step.
 
 | Step | Description | Status | Last updated | Evidence / next action |
 | --- | --- | --- | --- | --- |
-| 0 | Resume check and baseline confirmation | COMPLETE | 2026-09-12 | Baseline verified. Application directory exists; Git is not initialized; `package-lock.json` and `node_modules` are absent. Node.js is v24.19.0 rather than the required Node.js 22 baseline. Next action: request approval for Step 1. |
+| 0 | Resume check and baseline confirmation | COMPLETE | 2026-09-12 | Baseline verified. Application directory exists; Git is not initialized; `package-lock.json` and `node_modules` are absent. Node.js is v24.19.0 and satisfies the declared `>=22.0.0` requirement. The user directed agents not to switch it for Step 4. Next action: request approval for Step 1. |
 | 1 | Confirm repository root and deployment scope | COMPLETE | 2026-09-12 | Confirmed `beforebuild-source/beforebuild` as the future repository root and the target as the connected, invite-only private beta. Next action: request separate approval for Step 2. |
 | 2 | Initialize local Git repository | COMPLETE | 2026-09-12 | Secret scan found no likely real credential; environment-file ignore coverage was tightened; Git was initialized on empty `main`; 46 intended files are untracked and no commit exists. Next action: request separate approval and GitHub destination for Step 3. |
 | 3 | Create and connect public GitHub repository | COMPLETE | 2026-09-12 | Public `BSJAIN92/beforebuild` exists; `main` is the default branch and tracks `origin/main`; expected root layout and history scan verified. Next action: request separate approval for Step 4. |
-| 4 | Install dependencies and create lockfile | NOT STARTED | — | Step 3 complete; awaiting separate user approval for Step 4. |
-| 5 | Fix and run the local automated checks | NOT STARTED | — | Await Step 4. |
+| 4 | Install dependencies and create lockfile | COMPLETE | 2026-09-12 | `npm install` and a clean `npm ci` succeeded on Node.js v24.19.0; lockfile v3 created; audit found 0 vulnerabilities. Clerk post-install script remained blocked pending review. Next action: request separate approval for Step 5. |
+| 5 | Fix and run the local automated checks | NOT STARTED | — | Step 4 complete; awaiting separate user approval for Step 5. |
 | 6 | Create and configure Convex development deployment | NOT STARTED | — | Await Step 5 and user access. |
 | 7 | Configure Clerk development authentication | NOT STARTED | — | Await Step 6 and user access. |
 | 8 | Verify the connected application locally | NOT STARTED | — | Await Step 7. |
@@ -130,7 +130,7 @@ Actions performed: Read this execution plan in full; inspected the application d
 Commands run: Get-Content -LiteralPath 'DEPLOYMENT_EXECUTION_PLAN.md' -Raw (from the workspace root); Get-Location; Get-ChildItem -Force; git status --short --branch; Test-Path -LiteralPath 'package-lock.json'; Test-Path -LiteralPath 'node_modules'; node --version; npm --version (baseline commands run from beforebuild-source/beforebuild).
 Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this progress record. No product files or external services were changed.
 Verification evidence: The application path is D:\One Drive\OneDrive\Self Docs\Bhavya\Startup\BMC\GPT 6 Web Source\beforebuild-source\beforebuild. Expected application items including package.json, app, components, convex, and lib exist. Git reported "not a git repository". Both package-lock.json and node_modules returned False. Node.js reported v24.19.0 and npm reported 12.0.2. The prior ledger accurately stated that Git, the lockfile, and dependencies were absent. The additional Node.js version mismatch is now recorded.
-Blocker or next action: No Step 0 blocker. Step 1 is next and requires separate user approval. Step 1 must confirm the proposed repository root and connected invite-only beta scope. Before dependency work in Step 4, switch to or otherwise use Node.js 22 as required by the plan.
+Blocker or next action: No Step 0 blocker. Step 1 is next and requires separate user approval. Step 1 must confirm the proposed repository root and connected invite-only beta scope. Node.js v24.19.0 satisfies the package's `>=22.0.0` requirement and must not be switched for Step 4, per the user's later direction.
 ```
 
 Before acting, inspect:
@@ -269,7 +269,7 @@ Actions performed: Read the current execution plan and verified Steps 0–2 were
 Commands run: Get-Content of the workspace plan; gh auth status; gh repo view BSJAIN92/beforebuild with safe metadata fields before and after creation; git status --short --branch --untracked-files=all; Get-ChildItem filename scan; rg path-only credential pattern scan; metadata-only PowerShell secret classifier; Copy-Item of the plan into the repository root; Get-FileHash to verify the source and copied plan initially matched; git ls-files --others --exclude-standard; git add --all; git diff --cached --name-status; git commit; gh repo create BSJAIN92/beforebuild --public --source=. --remote=origin --push; gh api repository-root metadata query; git remote -v; git branch -vv; git ls-tree --name-only HEAD; path-only git grep over all commits for credential-shaped tokens and private-key blocks; git status --short --branch. The first repository-plan patch failed only because its heading context differed and changed nothing; smaller corrected edits succeeded.
 Files changed: beforebuild-source/beforebuild/DEPLOYMENT_EXECUTION_PLAN.md was added and made authoritative; all 46 previously reviewed application/source files entered Git in the initial commit. The workspace-root DEPLOYMENT_EXECUTION_PLAN.md remains preserved as a safety backup and was not deleted. No dependency files, service credentials, or product behavior were changed.
 Verification evidence: Initial commit 4814dd3 contains 47 files and was pushed. GitHub reports nameWithOwner BSJAIN92/beforebuild, visibility PUBLIC, default branch main, and SSH URL git@github.com:BSJAIN92/beforebuild.git. The remote root directly contains package.json, app, components, convex, lib, README.md, and this plan. Local main tracks origin/main. Repeat working-tree classification reported SuspectedRealCount=0, and the path-only scan of every Git commit found no credential-shaped token or private-key block. The public repository URL is https://github.com/BSJAIN92/beforebuild. Public-source risk is explicit: anyone may read or copy committed code, while running-product access must remain restricted by verified-email allowlisting.
-Blocker or next action: No Step 3 blocker. Step 4 is next and requires separate user approval. Before installing dependencies, use the required Node.js 22 baseline rather than the currently installed Node.js 24. Do not begin Step 4 without approval.
+Blocker or next action: No Step 3 blocker. Step 4 is next and requires separate user approval. Keep the currently installed Node.js v24.19.0; it satisfies the declared `>=22.0.0` requirement, and the user explicitly directed agents not to switch it. Do not begin Step 4 without approval.
 ```
 
 Actions:
@@ -289,9 +289,23 @@ Acceptance check:
 
 ### Step 4 — Install dependencies and create the lockfile
 
+Progress record:
+
+```text
+Status: COMPLETE
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user explicitly approved Step 4 only and directed agents to keep Node.js v24.19.0.
+Actions performed: Read the authoritative repository plan and verified Steps 0–3 were COMPLETE; confirmed local HEAD matched origin/main; reviewed the existing uncommitted plan-only Node.js decision and preserved it; confirmed package.json and its declared Node.js >=22.0.0 engine; ran npm install; reviewed direct resolved versions and the machine-readable audit summary; reviewed npm's blocked-install-script report; verified package.json was unchanged by hash; ran npm ci, which safely replaced only ignored generated node_modules; verified the resulting dependency tree and lockfile metadata.
+Commands run: Get-Content DEPLOYMENT_EXECUTION_PLAN.md; git status --short --branch; git rev-parse HEAD and origin/main; Test-Path for package.json, package-lock.json, and node_modules; node --version; npm --version; Get-FileHash package.json; Get-Content package.json; git diff checks; npm install; npm ls --depth=0; npm audit --json; npm install-scripts ls; npm ci; metadata-only Node.js inspection of package-lock.json; git check-ignore -v node_modules.
+Files changed: package-lock.json was created. DEPLOYMENT_EXECUTION_PLAN.md contains the previously approved Node.js v24.19.0 decision and this Step 4 record. package.json and product code were not changed. node_modules was generated, then safely replaced by npm ci, and remains ignored by Git.
+Verification evidence: npm install added 48 packages and completed successfully. npm ci independently added 48 packages from the lockfile and completed successfully. package-lock.json exists, uses lockfileVersion 3, records 107 package entries (106 dependency entries with integrity metadata), and preserves the root Node.js engine >=22.0.0. Direct resolved versions are @clerk/nextjs 6.39.6, convex 1.45.0, next 16.3.5, react 19.3.0, react-dom 19.3.0, typescript 5.9.3, @types/node 22.20.2, @types/react 19.3.0, and @types/react-dom 19.3.0. npm audit reported 0 info, low, moderate, high, or critical vulnerabilities. The package.json SHA-256 hash remained unchanged. node_modules is ignored.
+Blocker or next action: No Step 4 blocker. npm 12 blocked @clerk/shared 3.47.8's postinstall script because no allowScripts decision is recorded. Do not approve it automatically. Proposed response: keep it blocked for now, run Step 5 checks, and before live Clerk testing review the package's documented need for that script; approve or deny it only through a separate user-approved change if testing or official guidance shows a need. Step 5 is next and requires separate user approval. Do not run or fix tests under Step 4.
+```
+
 Actions:
 
-1. Use Node.js 22 for the supported deployment baseline.
+1. Keep the installed Node.js v24.19.0 for local dependency work. It satisfies the package's declared `>=22.0.0` requirement, and the user explicitly directed agents not to switch it.
 2. Run `npm install`.
 3. Review resolved dependency versions and `npm audit` output.
 4. Save and review `package-lock.json`.
