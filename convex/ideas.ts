@@ -4,17 +4,18 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { BLOCKS, createIdea, makeMessage, uid, normalizeEmail, tierRank, TIERS, type Idea, type Tier, type CanvasItem } from "../lib/model";
 import { requireViewer } from "./access";
-import { charge, decode, encode, limit, owned, requireFreeBeta, requireIdle } from "./guards";
+import { charge, decode, encode, limit, owned, requireAIEnabled, requireFreeBeta, requireIdle, throttle } from "./guards";
 import { founderInputError } from "../lib/input-policy";
 const tierValidator = v.union(v.literal("basic"), v.literal("intermediate"), v.literal("advanced"));
 const evidenceValidator = v.union(v.literal("founder"), v.literal("research"), v.literal("assumption"));
 const idArgs = { id: v.id("ideas") };
 async function save(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea) { idea.updatedAt = Date.now(); await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt }); }
-async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, finish: boolean): Promise<void> {
+async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, finish: boolean, inputMessageId?: string): Promise<void> {
+  requireAIEnabled(); await throttle(ctx, row.owner);
   await charge(ctx, row.owner, idea.tier, "turns");
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   idea.status = "thinking"; idea.statusLabel = "Thinking through your answer"; idea.error = ""; idea.updatedAt = Date.now();
-  await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: finish, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });
+  await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: finish, runMessageId: inputMessageId, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });
   await ctx.scheduler.runAfter(0, internal.runner.work, { id: row._id, token });
   await ctx.scheduler.runAfter(31 * 60 * 1000, internal.jobs.watchdog, { id: row._id, token });
 }
@@ -36,13 +37,17 @@ export const create = mutation({ args: { description: v.string(), tier: tierVali
   idea.id = id; await ctx.db.patch(id, { document: encode(idea) }); return id;
 } });
 export const send = mutation({ args: { ...idArgs, text: v.string(), finish: v.optional(v.boolean()) }, handler: async (ctx, args) => {
-  const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
+  const { viewer, row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
   const text = args.text.trim(); if (!text && !args.finish) throw new ConvexError("Write an answer, or choose to create a draft now.");
   if (text.length > 4000) throw new ConvexError("Keep each answer under 4,000 characters.");
-  if (text) { const policyError = founderInputError(text); if (policyError) throw new ConvexError(policyError); }
+  if (text) { const policyError = founderInputError(text); if (policyError) {
+    await ctx.db.insert("rejectedInputs", { owner: row.owner, email: viewer.email, ideaId: row._id, tier: idea.tier, text, reason: policyError, source: "local", createdAt: Date.now() });
+    idea.messages.push(makeMessage("assistant", policyError)); await save(ctx, row, idea); return;
+  } }
   if (idea.messages.length >= 100) throw new ConvexError("This exploration has reached its conversation limit. Export it and start a new version.");
-  if (text) { idea.messages.push(makeMessage("user", text)); idea.answerCount += 1; }
-  await enqueue(ctx, row, idea, !!args.finish);
+  let inputMessageId: string | undefined;
+  if (text) { const message = makeMessage("user", text); inputMessageId = message.id; idea.messages.push(message); idea.answerCount += 1; }
+  await enqueue(ctx, row, idea, !!args.finish, inputMessageId);
 } });
 export const retry = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
@@ -90,7 +95,7 @@ export const cancel = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id);
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
   idea.status = "error"; idea.statusLabel = "Paused — your work is saved"; idea.error = "Response cancelled. Retry to continue with your saved answers.";
-  await ctx.db.patch(row._id, { document: encode(idea), runToken: undefined, leaseUntil: 0, responseId: undefined });
+  await ctx.db.patch(row._id, { document: encode(idea), runToken: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
 } });
 export const remove = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row } = await owned(ctx, args.id);

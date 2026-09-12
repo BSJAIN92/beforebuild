@@ -4,13 +4,20 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { provider, researchReport, type ProviderResponse } from "./providers";
 import { cleanError, type Idea } from "../lib/model";
-interface WorkState { idea: Idea; stage: string; responseId?: string; finish: boolean; polls: number; researchKind?: string; }
+import { requireAIEnabled } from "./guards";
+interface WorkState { idea: Idea; stage: string; responseId?: string; finish: boolean; polls: number; researchKind?: string; inputMessageId?: string; }
 export const work = internalAction({ args: { id: v.id("ideas"), token: v.string() }, handler: async (ctx, args): Promise<void> => {
   let responseToClean: string | undefined;
   try {
     const state = await ctx.runMutation(internal.jobs.claim, args) as WorkState | null;
     if (!state) return;
+    requireAIEnabled();
     const ai = provider(); const idea = state.idea;
+    if (state.inputMessageId) {
+      const input = idea.messages.find(message => message.id === state.inputMessageId && message.role === "user");
+      if (input && await ai.moderate(input.text)) { await ctx.runMutation(internal.jobs.rejectModerated, { ...args, messageId: state.inputMessageId }); return; }
+      await ctx.runMutation(internal.jobs.markModerated, { ...args, messageId: state.inputMessageId });
+    }
     const kind = idea.tier === "advanced" ? "advanced" : "intermediate";
     const needsResearch = idea.tier !== "basic" && idea.researchConsent && (idea.answerCount >= 2 || state.finish) && !idea.reports.some(r => r.kind === idea.tier && !r.demo);
     let research: ProviderResponse | undefined;

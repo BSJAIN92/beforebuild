@@ -38,6 +38,7 @@
 .empty-block>span{font-size:10px;color:#8e9c7d}
 .inline-source{font-size:10px}
 .edited-note{font-size:9px}
+.usage-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:20px 0}.usage-grid>div{background:#f5f8ef;border:1px solid #e3ead9;border-radius:7px;padding:13px;display:grid;gap:4px}.usage-grid strong{font-size:20px;color:#4d6948}.usage-grid span{font-size:9px;color:#73846c}.rejection-list{display:grid;gap:8px}.rejection-row{border:1px solid #e5eadc;border-radius:7px;padding:11px}.rejection-row summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#64775e}.rejection-row p{margin:11px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.rejection-row small{font-size:9px;color:#819078}.rejection-row time{white-space:nowrap}
 .canvas-bottom-note{font-size:11px}
 .canvas-summary p,.panel-intro p,.challenge-card>p,.suggested-test p,.experiment-card dd{font-size:13px}
 .experiment-card dt,.suggested-test strong{font-size:11px}

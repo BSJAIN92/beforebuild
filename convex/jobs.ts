@@ -2,7 +2,7 @@ import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { emailAllowed } from "./access";
-import { charge, decode, encode } from "./guards";
+import { charge, decode, encode, refundTurn } from "./guards";
 import { applyTurn, type Turn } from "../lib/ai-contract";
 import { makeMessage, type ResearchReport } from "../lib/model";
 const args = { id: v.id("ideas"), token: v.string() };
@@ -15,7 +15,19 @@ export const claim = internalMutation({ args, handler: async (ctx, { id, token }
     await ctx.db.patch(id, { document: encode(idea), runToken: undefined, responseId: undefined }); return null;
   }
   await ctx.db.patch(id, { leaseUntil: Date.now() + 125000 });
-  return { idea: decode(row), stage: row.runStage || "start", responseId: row.responseId, finish: row.runFinish || false, polls: row.polls || 0, researchKind: row.researchKind };
+  return { idea: decode(row), stage: row.runStage || "start", responseId: row.responseId, finish: row.runFinish || false, polls: row.polls || 0, researchKind: row.researchKind, inputMessageId: row.runMessageId };
+} });
+export const rejectModerated = internalMutation({ args: { ...args, messageId: v.string() }, handler: async (ctx, { id, token, messageId }) => {
+  const row = await ctx.db.get(id); if (!row || row.runToken !== token || row.runMessageId !== messageId) return;
+  const idea = decode(row); const message = idea.messages.find(item => item.id === messageId && item.role === "user"); if (!message) return;
+  const reason = "That message cannot be processed safely. Please answer the current business question without harmful or sensitive content.";
+  await ctx.db.insert("rejectedInputs", { owner: row.owner, email: row.email, ideaId: row._id, tier: idea.tier, text: message.text, reason, source: "moderation", createdAt: Date.now() });
+  idea.messages = idea.messages.filter(item => item.id !== messageId); idea.answerCount = Math.max(0, idea.answerCount - 1); idea.messages.push(makeMessage("assistant", reason)); idea.status = "draft"; idea.statusLabel = "Ready for a relevant answer";
+  await refundTurn(ctx, row.owner, idea.tier);
+  await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
+} });
+export const markModerated = internalMutation({ args: { ...args, messageId: v.string() }, handler: async (ctx, { id, token, messageId }) => {
+  const row = await ctx.db.get(id); if (row?.runToken === token && row.runMessageId === messageId) await ctx.db.patch(id, { runMessageId: undefined });
 } });
 export const reserveResearch = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return false;
@@ -44,17 +56,17 @@ export const complete = internalMutation({ args: { ...args, turnJson: v.string()
   const before = decode(row); const idea = applyTurn(before, turn, row.runFinish || false);
   const reply = turn.reply + (!idea.question || turn.reply.includes(idea.question) ? "" : "\n\n" + idea.question);
   idea.messages.push(makeMessage("assistant", reply));
-  await ctx.db.patch(id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt, runToken: undefined, runStage: undefined, leaseUntil: 0, responseId: undefined });
+  await ctx.db.patch(id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt, runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
 } });
 export const fail = internalMutation({ args: { ...args, error: v.string() }, handler: async (ctx, { id, token, error }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;
   const idea = decode(row); idea.status = "error"; idea.statusLabel = "Your answer is saved"; idea.error = error.slice(0, 350);
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
-  await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runStage: undefined, leaseUntil: 0, responseId: undefined });
+  await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
 } });
 export const watchdog = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;
   const idea = decode(row); idea.status = "error"; idea.statusLabel = "The research paused"; idea.error = "This job exceeded the beta time limit. Your work is saved. Retry to continue.";
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
-  await ctx.db.patch(id, { document: encode(idea), runToken: undefined, leaseUntil: 0, responseId: undefined });
+  await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
 } });

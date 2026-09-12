@@ -7,6 +7,7 @@ export interface ProviderResponse {
   output?: { type?: string; content?: { type?: string; text?: string; annotations?: { type?: string; url?: string; title?: string; start_index?: number; end_index?: number }[] }[] }[];
 }
 export interface AIProvider {
+  moderate(text: string): Promise<boolean>;
   interview(idea: Idea, finish: boolean): Promise<Turn>;
   startResearch(idea: Idea): Promise<ProviderResponse>;
   retrieve(id: string): Promise<ProviderResponse>;
@@ -29,6 +30,11 @@ class OpenAIProvider implements AIProvider {
     this.base = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
     const url = new URL(this.base);
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("OPENAI_BASE_URL must be an HTTPS Responses API endpoint without credentials or query parameters.");
+  }
+  async moderate(text: string): Promise<boolean> {
+    const result = await this.request("/moderations", { method: "POST", body: JSON.stringify({ model: "omni-moderation-latest", input: text }) }) as unknown as { results?: { flagged?: boolean }[] };
+    if (!Array.isArray(result.results)) throw new Error("The safety check returned an invalid response. Your answer is saved; please retry.");
+    return result.results.some(item => item.flagged === true);
   }
   private async request(path: string, options: RequestInit = {}): Promise<ProviderResponse> {
     const response = await fetch(this.base + path, { ...options, headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(105000) });

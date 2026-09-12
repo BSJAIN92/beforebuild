@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useConvex, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
-import type { Backend, Invite, Pricing, Viewer } from "../lib/backend";
+import type { AbuseDashboard, Backend, Invite, Pricing, Viewer } from "../lib/backend";
 import type { Idea } from "../lib/model";
 import { createDemoBackend } from "../lib/demo";
 import { mountWorkspace } from "../lib/ui";
@@ -23,8 +23,9 @@ export function LiveWorkspace({ viewer }: { viewer: Viewer }) {
   const ideas = useQuery(api.ideas.list) as Idea[] | undefined;
   const pricing = useQuery(api.settings.getPricing) as Pricing | undefined;
   const invites = useQuery(api.access.listInvites, viewer.admin ? {} : "skip") as Invite[] | undefined;
+  const abuse = useQuery(api.abuse.dashboard, viewer.admin ? {} : "skip") as AbuseDashboard | undefined;
   const backend = useMemo(() => createLiveBackend(client, viewer, () => signOut({ redirectUrl: "/" })), [client, viewer.email, viewer.name, viewer.admin, signOut]);
-  useEffect(() => { if (ideas && pricing) backend.push({ ideas, pricing, invites: invites || [], viewer }); }, [backend, ideas, pricing, invites, viewer]);
+  useEffect(() => { if (ideas && pricing) backend.push({ ideas, pricing, invites: invites || [], abuse, viewer }); }, [backend, ideas, pricing, invites, abuse, viewer]);
   if (!ideas || !pricing) return <div className="auth-loading">Loading your saved ideas…</div>;
   return <Surface backend={backend} />;
 }

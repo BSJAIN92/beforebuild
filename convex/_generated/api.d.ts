@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as abuse from "../abuse.js";
 import type * as access from "../access.js";
 import type * as guards from "../guards.js";
 import type * as ideas from "../ideas.js";
@@ -23,6 +24,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  abuse: typeof abuse;
   access: typeof access;
   guards: typeof guards;
   ideas: typeof ideas;

@@ -2,7 +2,8 @@ import type { CanvasItem, BlockKey, ChallengeDecision, Idea, Tier } from "./mode
 export interface Viewer { email: string; name: string; admin: boolean; demo: boolean; }
 export interface Invite { email: string; active: boolean; }
 export interface Pricing { enabled: boolean; currency: string; intermediate: number; advanced: number; }
-export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; invites: Invite[]; }
+export interface AbuseDashboard { day: string; users: number; totals: { basicTurns: number; intermediateTurns: number; advancedTurns: number; intermediateResearch: number; advancedResearch: number; }; rejected: { id: string; email: string; ideaId: string; tier: string; text: string; reason: string; source: "local" | "moderation"; createdAt: number; }[]; }
+export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; invites: Invite[]; abuse?: AbuseDashboard; }
 export interface Backend {
   snapshot(): Snapshot;
   subscribe(callback: () => void): () => void;
