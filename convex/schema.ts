@@ -8,7 +8,10 @@ export default defineSchema({
     responseId: v.optional(v.string()), researchKind: v.optional(v.string()), polls: v.optional(v.number())
   }).index("by_owner", ["owner", "updatedAt"]),
   invites: defineTable({ email: v.string(), active: v.boolean(), updatedAt: v.number(), updatedBy: v.string() }).index("by_email", ["email"]),
-  settings: defineTable({ key: v.string(), enabled: v.boolean(), currency: v.string(), intermediate: v.number(), advanced: v.number() }).index("by_key", ["key"]),
+  settings: defineTable({
+    key: v.string(), enabled: v.optional(v.boolean()), currency: v.optional(v.string()), intermediate: v.optional(v.number()), advanced: v.optional(v.number()),
+    basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), intermediateResearch: v.optional(v.number()), advancedTurns: v.optional(v.number()), advancedResearch: v.optional(v.number())
+  }).index("by_key", ["key"]),
   usage: defineTable({
     owner: v.string(), day: v.string(),
     basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), advancedTurns: v.optional(v.number()),

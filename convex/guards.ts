@@ -33,15 +33,16 @@ export async function refundTurn(ctx: MutationCtx, owner: string, tier: Tier): P
   const row = await ctx.db.query("usage").withIndex("by_owner_day", q => q.eq("owner", owner).eq("day", day)).unique();
   if (row && config && (row[config.field] || 0) > 0) await ctx.db.patch(row._id, { [config.field]: (row[config.field] || 0) - 1 });
 }
-export function usageLimit(tier: Tier, kind: UsageKind): number {
-  return resolveUsageLimit(tier, kind, process.env);
+export async function usageLimit(ctx: MutationCtx, tier: Tier, kind: UsageKind): Promise<number> {
+  const overrides = await ctx.db.query("settings").withIndex("by_key", q => q.eq("key", "usageLimits")).unique();
+  return resolveUsageLimit(tier, kind, process.env, overrides || {});
 }
 export async function charge(ctx: MutationCtx, owner: string, tier: Tier, kind: UsageKind) {
   const config = USAGE_LIMITS[tier][kind];
   if (!config) throw new ConvexError("Research is not available on the Basic level.");
   const day = new Date(Date.now()).toISOString().slice(0, 10);
   const usage = await ctx.db.query("usage").withIndex("by_owner_day", q => q.eq("owner", owner).eq("day", day)).unique();
-  const max = usageLimit(tier, kind); const used = usage?.[config.field] || 0;
+  const max = await usageLimit(ctx, tier, kind); const used = usage?.[config.field] || 0;
   if (used >= max) throw new ConvexError(`You have reached the ${tier === "basic" ? "Basic" : tier === "intermediate" ? "Intermediate" : "Advanced"} daily ${kind === "turns" ? "AI message" : tier === "advanced" ? "deep-research" : "web-research"} limit. Your work is saved; the limit resets at 00:00 UTC.`);
   if (usage) await ctx.db.patch(usage._id, { [config.field]: used + 1 });
   else await ctx.db.insert("usage", { owner, day, [config.field]: 1 });

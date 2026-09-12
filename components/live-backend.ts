@@ -4,7 +4,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import type { Backend, Snapshot, Viewer } from "../lib/backend";
 export interface LiveBackend extends Backend { push(snapshot: Snapshot): void; }
 export function createLiveBackend(client: ConvexReactClient, viewer: Viewer, signOut: () => Promise<void>): LiveBackend {
-  let data: Snapshot = { ideas: [], viewer, invites: [], pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 } };
+  let data: Snapshot = { ideas: [], viewer, invites: [], pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 } };
   const listeners = new Set<() => void>(); const ideaId = (id: string) => id as Id<"ideas">;
   return {
     snapshot: () => data,
@@ -22,6 +22,7 @@ export function createLiveBackend(client: ConvexReactClient, viewer: Viewer, sig
     async cancel(id) { await client.mutation(api.ideas.cancel, { id: ideaId(id) }); },
     async invite(email, active) { await client.mutation(api.access.setInvite, { email, active }); },
     async savePricing(pricing) { await client.mutation(api.settings.savePricing, pricing); },
+    async saveUsageLimits(limits) { await client.mutation(api.settings.saveUsageLimits, limits); },
     logout: signOut
   };
 }
