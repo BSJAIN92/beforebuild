@@ -16,6 +16,10 @@ test('Moderation uses the text-only safety endpoint', async () => {
   global.fetch = async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return Response.json({ results: [{ flagged: true }] }); };
   assert.equal(await provider().moderate('unsafe test input'), true); assert.equal(requests[0].url, 'https://api.openai.com/v1/moderations'); assert.equal(requests[0].body.model, 'omni-moderation-latest'); assert.equal(requests[0].body.input, 'unsafe test input');
 });
+test('Zero-credit or rate-limit responses expose no provider body or secret', async () => {
+  global.fetch = async () => new Response('billing account detail / private request / not-a-real-test-key', { status: 429 });
+  await assert.rejects(() => provider().moderate('A valid business answer'), error => /rate or spending limit/.test(error.message) && !/billing account detail|private request|not-a-real-test-key/.test(error.message));
+});
 test('Intermediate uses provider-native web search in background mode', async () => {
   await provider().startResearch(idea('intermediate')); const r = requests[0];
   assert.equal(r.url, 'https://api.openai.com/v1/responses'); assert.equal(r.body.tools[0].type, 'web_search'); assert.equal(r.body.tool_choice, 'required'); assert.equal(r.body.background, true); assert.equal(r.body.max_tool_calls, 7);
