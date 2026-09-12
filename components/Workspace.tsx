@@ -25,7 +25,7 @@ export function LiveWorkspace({ viewer }: { viewer: Viewer }) {
   const usageLimits = useQuery(api.settings.getUsageLimits) as UsageLimits | undefined;
   const invites = useQuery(api.access.listInvites, viewer.admin ? {} : "skip") as Invite[] | undefined;
   const abuse = useQuery(api.abuse.dashboard, viewer.admin ? {} : "skip") as AbuseDashboard | undefined;
-  const backend = useMemo(() => createLiveBackend(client, viewer, () => signOut({ redirectUrl: "/" })), [client, viewer.email, viewer.name, viewer.admin, signOut]);
+  const backend = useMemo(() => createLiveBackend(client, viewer, () => signOut({ redirectUrl: "/sign-in" })), [client, viewer.email, viewer.name, viewer.admin, signOut]);
   useEffect(() => { if (ideas && pricing && usageLimits) backend.push({ ideas, pricing, usageLimits, invites: invites || [], abuse, viewer }); }, [backend, ideas, pricing, usageLimits, invites, abuse, viewer]);
   if (!ideas || !pricing || !usageLimits) return <div className="auth-loading">Loading your saved ideas…</div>;
   return <Surface backend={backend} />;

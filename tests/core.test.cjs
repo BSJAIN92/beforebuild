@@ -15,7 +15,14 @@ function storage() { const map = new Map(); return { getItem: k => map.get(k) ??
 beforeEach(() => { global.localStorage = storage(); });
 test('Clerk authentication stays on the application domain', () => {
   const provider = fs.readFileSync('components/Providers.tsx', 'utf8');
-  assert.match(provider, /<ClerkProvider\s+signInUrl="\/"\s+signUpUrl="\/"\s+afterSignOutUrl="\/">/);
+  const root = fs.readFileSync('components/ClientRoot.tsx', 'utf8');
+  const signInRoute = fs.readFileSync('app/sign-in/[[...sign-in]]/page.tsx', 'utf8');
+  const signUpRoute = fs.readFileSync('app/sign-up/[[...sign-up]]/page.tsx', 'utf8');
+  assert.match(provider, /<ClerkProvider\s+signInUrl="\/sign-in"\s+signUpUrl="\/sign-up"\s+afterSignOutUrl="\/sign-in">/);
+  assert.match(root, /<RedirectToSignIn\s*\/>/);
+  assert.doesNotMatch(root, /routing="hash"/);
+  assert.match(signInRoute, /<SignIn\s+path="\/sign-in"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);
+  assert.match(signUpRoute, /<SignUp\s+path="\/sign-up"\s+routing="path"\s+forceRedirectUrl="\/"\s*\/>/);
 });
 for (const tier of ['basic', 'intermediate', 'advanced']) test(`${tier}: complete interview gives all nine blocks and a validation plan`, () => {
   let i = idea(tier);
