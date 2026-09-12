@@ -1,0 +1,252 @@
+import { BLOCKS, TIERS, cleanError, coverage, evidenceCount, isBusy, safeUrl, tierRank, uid, type BlockKey, type CanvasItem, type Idea, type Tier } from "./model";
+import type { Backend, Snapshot } from "./backend";
+import { icon } from "./icons";
+import { exportIdea, toMarkdown } from "./export";
+export function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)); }
+const e = escapeHtml;
+export function richText(value: string): string {
+  // No raw HTML. Only safe HTTP(S) Markdown links and simple inline emphasis.
+  return value.split(/\n\n+/).filter(Boolean).map(p => {
+    let output = ""; let at = 0; const re = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    for (const match of p.matchAll(re)) {
+      output += e(p.slice(at, match.index)); const url = safeUrl(match[2]);
+      output += url ? `<a href="${e(url)}" target="_blank" rel="noopener noreferrer">${e(match[1])}${icon("external", 11)}</a>` : e(match[0]);
+      at = (match.index || 0) + match[0].length;
+    }
+    output += e(p.slice(at));
+    return `<p>${output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+}
+function pill(text: string, cls = ""): string { return `<span class="pill ${cls}">${e(text)}</span>`; }
+function tierIcon(tier: Tier): string { return tier === "basic" ? "leaf" : tier === "intermediate" ? "globe" : "telescope"; }
+function formatDate(date: number): string { return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+export function mountWorkspace(root: HTMLElement, backend: Backend): () => void {
+  let snapshot: Snapshot = backend.snapshot();
+  let view: "home" | "ideas" | "guide" | "settings" = "home";
+  let selectedId: string | null = null;
+  let tab: "canvas" | "assumptions" | "research" | "validation" = "canvas";
+  let mobileTab = "chat"; let navOpen = false; let draft = ""; let rawIdea = "";
+  let selectedTier: Tier = "basic"; let consent = false; let toast = "";
+  let destroyed = false; let sending = false; let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  const current = () => snapshot.ideas.find(i => i.id === selectedId);
+  const button = (label: string, action: string, cls = "button secondary", attributes = "") => `<button class="${cls}" data-action="${action}" ${attributes}>${label}</button>`;
+  function notify(message: string) { toast = message; render(); clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast = ""; if (!destroyed) render(); }, 6000); }
+  async function attempt(fn: () => Promise<void>) { try { await fn(); } catch (error) { notify(cleanError(error)); } }
+  function nav() {
+    const ideas = snapshot.ideas.slice(0, 5);
+    return `<aside class="sidebar ${navOpen ? "is-open" : ""}" aria-label="Main navigation">
+      <button class="brand" data-action="home" aria-label="BeforeBuild home"><span class="brand-mark">${icon("spark", 23)}</span><span>beforebuild<span class="brand-period">.</span></span></button>
+      <div class="workspace-label">PERSONAL WORKSPACE</div>
+      <nav class="nav-links">
+        ${button(icon("grid") + "My workspace", "home", `nav-link ${view === "home" && !selectedId ? "active" : ""}`)}
+        ${button(icon("folder") + `All ideas <span class="nav-count">${snapshot.ideas.length}</span>`, "ideas", `nav-link ${view === "ideas" ? "active" : ""}`)}
+        ${button(icon("book") + "How it works", "guide", `nav-link ${view === "guide" ? "active" : ""}`)}
+      </nav>
+      <div class="sidebar-ideas"><div class="section-label">YOUR IDEAS ${button(icon("plus", 15), "new", "icon-button tiny", 'aria-label="New idea"')}</div>
+        ${ideas.length ? ideas.map(i => `<button class="idea-nav ${selectedId === i.id ? "active" : ""}" data-action="open" data-id="${e(i.id)}"><span class="idea-dot ${i.status === "ready" ? "ready" : ""}"></span><span>${e(i.title)}</span></button>`).join("") : '<p class="nav-empty">Room for your next big<br>small idea.</p>'}
+      </div>
+      <div class="sidebar-bottom"><div class="beta-note"><span class="beta-note-icon">${icon("spark", 18)}</span><strong>Small beta. Big possibilities.</strong><p>Every level is free while we<br>build this together.</p><span class="mini-label">INVITE-ONLY BETA</span></div>
+      ${snapshot.viewer.admin ? button(icon("settings", 18) + "Beta settings", "settings", `nav-link settings-link ${view === "settings" ? "active" : ""}`) : ""}
+      <div class="profile"><div class="avatar">${e(snapshot.viewer.name.charAt(0).toUpperCase() || "F")}</div><div><strong>${e(snapshot.viewer.name || "Founder")}</strong><span>${snapshot.viewer.demo ? "Demo workspace" : "Personal workspace"}</span></div>${!snapshot.viewer.demo ? button(icon("logout", 17), "logout", "icon-button", 'aria-label="Sign out"') : ""}</div></div>
+    </aside>`;
+  }
+  function header() {
+    const title = selectedId ? "Idea workspace" : view === "home" ? "My workspace" : view === "ideas" ? "All ideas" : view === "guide" ? "How it works" : "Beta settings";
+    return `<header class="topbar"><div class="topbar-left">${button(icon("menu"), "menu", "icon-button mobile-menu", 'aria-label="Toggle navigation"')}<span class="topbar-title">${title}</span></div><div class="topbar-right">${snapshot.viewer.demo ? button('<span class="status-dot amber"></span> Interactive demo', "demo-info", "demo-badge") : '<span class="connection-badge"><span class="status-dot"></span> Connected</span>'}<span class="private-badge">${icon("lock", 14)} Private beta</span></div></header>`;
+  }
+  function tiers(compact = false, currentTier?: Tier) {
+    return `<div class="tier-grid ${compact ? "compact" : ""}" role="group" aria-label="Choose a depth">${(Object.keys(TIERS) as Tier[]).map(t => `<button type="button" class="tier-card ${selectedTier === t ? "selected" : ""} ${t === "intermediate" ? "recommended" : ""}" data-action="tier" data-tier="${t}" aria-pressed="${selectedTier === t}" ${currentTier && tierRank(t) <= tierRank(currentTier) ? "disabled" : ""}>
+      <div class="tier-card-top"><span class="tier-icon ${t}">${icon(tierIcon(t), 20)}</span><span class="radio-indicator">${selectedTier === t ? '<span></span>' : ""}</span></div>
+      <strong>${TIERS[t].label}</strong><span class="tier-desc">${TIERS[t].description}</span><span class="tier-detail">${TIERS[t].min}–${TIERS[t].max} questions${t === "basic" ? " · No research" : t === "intermediate" ? " · Web research" : " · Deep research"}</span><span class="tier-free">${t === "basic" ? "Always free" : "Free during beta"}</span></button>`).join("")}</div>`;
+  }
+  function newIdeaForm() {
+    return `<form id="new-idea-form" class="new-idea-form"><div class="input-heading"><span class="step-number">01</span><label for="raw-idea">What are you thinking about?</label><span>Rough is good.</span></div>
+      <div class="idea-input-wrap"><textarea id="raw-idea" name="idea" maxlength="5000" rows="4" placeholder="I’m thinking of building a tool that helps [someone] with [a problem]…" required>${e(rawIdea)}</textarea><span class="input-corner">No pitch deck required ${icon("spark", 13)}</span></div>
+      <div class="example-prompts"><span>Try a starting point:</span>${button("A micro-SaaS idea", "prompt", "prompt-chip", 'type="button" data-prompt="A tool that helps independent consultants turn meeting notes into follow-up proposals without starting from scratch."')}${button("A niche service", "prompt", "prompt-chip", 'type="button" data-prompt="A service that helps small neighborhood cafés set up a simple loyalty program their customers actually use."')}</div>
+      <div class="input-heading depth-heading"><span class="step-number">02</span><label>How deep do you want to go?</label></div>
+      ${tiers()}
+      ${selectedTier !== "basic" ? `<label class="consent"><input id="research-consent" type="checkbox" ${consent ? "checked" : ""} required><span>I agree to share my idea and relevant answers with the AI provider for web research. I won’t include secrets or personal customer data.</span></label>` : ""}
+      <div class="form-footer"><p>${icon("shield", 15)} ${snapshot.viewer.demo ? "Demo ideas stay in this browser." : "Your ideas stay in your private workspace."}</p><button class="button primary start-button" type="submit" ${sending ? "disabled" : ""}>${sending ? "Creating…" : "Let’s explore this idea"} ${icon("arrow", 18)}</button></div></form>`;
+  }
+  function home() {
+    return `<main class="home-page page"><div class="home-intro"><div class="eyebrow"><span class="small-line"></span> A LITTLE CLARITY BEFORE A LOT OF CODE</div><h1>Your next idea deserves<br>a <em>better beginning.</em></h1><p>Turn a rough idea into a business worth testing.<br class="desktop-break"> No business degree. No blank canvas. Just a good conversation.</p></div>
+      <div class="start-layout"><section class="start-card">${newIdeaForm()}</section><aside class="right-note"><div class="note-art" aria-hidden="true"><div class="art-label">FROM “WHAT IF” TO “WHAT’S NEXT”</div><div class="mini-canvas"><div class="mini-cell tall"><i></i><b></b><b></b></div><div class="mini-cell"><i></i><b></b></div><div class="mini-cell center tall">${icon("spark", 28)}<span>Your<br>idea, clearer.</span></div><div class="mini-cell"><i></i><b></b></div><div class="mini-cell tall"><i></i><b></b><b></b></div><div class="mini-cell"><i></i><b></b></div><div class="mini-cell"><i></i><b></b></div><div class="mini-cell wide"><i></i><b></b></div><div class="mini-cell wide"><i></i><b></b></div></div><span class="art-caption">Less guessing. More understanding.</span><div class="art-spark">✳</div></div>
+      <div class="what-you-get"><h3>A plan, not just a pretty canvas.</h3><div>${icon("chat", 19)}<p><strong>A conversation that gets it</strong><span>One question at a time, in plain English.</span></p></div><div>${icon("flag", 19)}<p><strong>A little constructive friction</strong><span>Spot the assumptions before they get expensive.</span></p></div><div>${icon("target", 19)}<p><strong>A next step you can actually take</strong><span>Know what to test before you start building.</span></p></div></div></aside></div>
+      <section class="recent-section"><div class="section-header"><h2>${snapshot.ideas.length ? "Pick up where you left off" : "Your ideas start here"}</h2>${snapshot.ideas.length ? button('View all ' + icon("arrow", 16), "ideas", "text-button") : '<span class="muted">One workspace. Plenty of possibilities.</span>'}</div><div class="idea-card-grid">${snapshot.ideas.slice(0, 3).map(ideaCard).join("")}${snapshot.viewer.demo ? `<button class="sample-card" data-action="sample"><span class="sample-icon">${icon("bulb", 24)}</span><span><strong>Curious how it comes together?</strong><small>Explore Nudge, a fictional micro-SaaS idea.</small></span>${icon("arrow", 20)}</button>` : `<button class="sample-card" data-action="new"><span class="sample-icon">${icon("plus", 24)}</span><span><strong>Every business begins with a question.</strong><small>Start exploring an idea above.</small></span></button>`}</div></section>
+      <footer class="page-footer">Made for small teams with big curiosity.<span>Think first. Build better.</span></footer></main>`;
+  }
+  function ideaCard(i: Idea) {
+    return `<article class="idea-card" data-search="${e((i.title + " " + i.description).toLowerCase())}"><button class="idea-card-main" data-action="open" data-id="${e(i.id)}"><div class="idea-card-top"><span class="project-icon">${icon(tierIcon(i.tier), 20)}</span>${pill(TIERS[i.tier].label, "neutral")}</div><h3>${e(i.title)}</h3><p>${e(i.description)}</p><div class="idea-card-bottom"><span><span class="status-dot ${i.status === "ready" ? "" : "amber"}"></span>${i.status === "ready" ? "Ready to test" : "Taking shape"}</span><span>${coverage(i)}/9 blocks ${icon("arrow", 16)}</span></div></button><div class="idea-card-meta"><span>Updated ${formatDate(i.updatedAt)}</span>${button(icon("trash", 15), "delete", "icon-button tiny", `aria-label="Delete ${e(i.title)}" data-id="${e(i.id)}"`)}</div></article>`;
+  }
+  function library() {
+    return `<main class="page library-page"><div class="page-title-row"><div><div class="eyebrow">YOUR THINKING, IN ONE PLACE</div><h1>All ideas<span class="title-count">${snapshot.ideas.length}</span></h1><p>Come back to a draft. Go deeper. Try a different direction.</p></div>${button(icon("plus", 17) + " New idea", "new", "button primary")}</div><div class="library-toolbar"><label class="search-field">${icon("search", 18)}<input id="idea-search" placeholder="Search your ideas" aria-label="Search your ideas"></label><span class="muted">Most recently updated first</span></div><div class="idea-card-grid library-grid">${[...snapshot.ideas].sort((a, b) => b.updatedAt - a.updatedAt).map(ideaCard).join("") || `<div class="empty-state">${icon("bulb", 32)}<h2>A little curiosity goes a long way.</h2><p>You haven’t started an idea yet.</p>${button("Explore your first idea " + icon("arrow", 16), "new", "button primary")}</div>`}</div></main>`;
+  }
+  function sourceLinks(i: Idea, ids: string[]) {
+    const sources = i.reports.flatMap(r => r.sources);
+    return ids.map(id => { const s = sources.find(s => s.id === id); const url = s && safeUrl(s.url); return s && url ? `<a class="inline-source" href="${e(url)}" target="_blank" rel="noopener noreferrer" title="${e(s.title)}">${icon("external", 10)} Source</a>` : ""; }).join("");
+  }
+  function canvas(i: Idea) {
+    return `<div class="canvas-top"><div><span class="eyebrow">BUSINESS MODEL CANVAS</span><h2>The business, at a glance.</h2><p>A living draft. Click any section to make it yours.</p></div><span class="canvas-count">${coverage(i)}<small>/ 9</small><span>sections explored</span></span></div><div class="legend"><span><i class="evidence-dot founder"></i>Founder input</span><span><i class="evidence-dot research"></i>Research</span><span><i class="evidence-dot assumption"></i>Assumption</span><span class="legend-help" title="Founder input is self-reported, not verified. Research requires source support. Assumptions are still untested.">${icon("info", 14)}</span></div>
+    <div class="canvas-scroll"><div class="canvas-grid">${BLOCKS.map(b => `<section class="canvas-block block-${b.key} ${i.canvas[b.key].length ? "has-content" : ""}" tabindex="0" role="button" aria-label="Edit ${b.label}" data-action="edit-block" data-block="${b.key}"><div class="block-heading"><span>${icon(b.icon, 16)}${b.label}</span><span class="block-edit">${icon("edit", 12)}</span></div>${i.canvas[b.key].length ? i.canvas[b.key].map(item => `<div class="canvas-item ${item.evidence}"><span class="evidence-dot ${item.evidence}" title="${item.evidence}"></span><p>${e(item.text)}${sourceLinks(i, item.sourceIds)}${item.edited ? '<span class="edited-note">Edited by you</span>' : ""}</p></div>`).join("") : `<div class="empty-block">${e(b.hint)}<span>${icon("plus", 13)} We’ll figure this out</span></div>`}</section>`).join("")}</div></div>
+    <div class="canvas-bottom-note">${icon("info", 15)} A filled canvas is a starting point, not proof that a business will work.</div>${i.summary ? `<section class="canvas-summary"><h3>${icon("spark", 17)} The shape of the idea</h3>${richText(i.summary)}</section>` : ""}`;
+  }
+  function challenges(i: Idea) {
+    return `<div class="panel-intro"><div class="eyebrow">A LITTLE CONSTRUCTIVE FRICTION</div><h2>What needs to be true?</h2><p>These are questions to investigate, not reasons to give up. You make the call.</p></div>${i.challenges.length ? i.challenges.map(c => `<article class="challenge-card"><div class="challenge-head">${pill(c.severity === "high" ? "Test first" : "Worth exploring", c.severity === "high" ? "amber" : "neutral")}${c.decision !== "open" ? pill(c.decision === "accept" ? "Added to your focus" : c.decision === "revise" ? "You chose to revise" : "Keeping your direction", "green") : ""}</div><h3>${e(c.title)}</h3><p>${e(c.detail)} ${sourceLinks(i, c.sourceIds)}</p><div class="suggested-test">${icon("target", 17)}<div><strong>A way to find out</strong><p>${e(c.test)}</p></div></div><div class="challenge-actions">${button(icon("check", 14) + " Test this", "decide", `button small ${c.decision === "accept" ? "selected-action" : "secondary"}`, `data-challenge="${e(c.id)}" data-decision="accept" ${isBusy(i) ? "disabled" : ""}`)}${button("Revise my idea", "decide", `button small ${c.decision === "revise" ? "selected-action" : "secondary"}`, `data-challenge="${e(c.id)}" data-decision="revise" ${isBusy(i) ? "disabled" : ""}`)}${button("Keep my direction", "decide", `text-button small ${c.decision === "decline" ? "selected-action" : ""}`, `data-challenge="${e(c.id)}" data-decision="decline" ${isBusy(i) ? "disabled" : ""}`)}</div></article>`).join("") : `<div class="empty-state">${icon("flag", 34)}<h3>We’ll look for the important unknowns.</h3><p>As you answer, your thinking partner will surface assumptions worth testing.</p></div>`}`;
+  }
+  function research(i: Idea) {
+    return `<div class="panel-intro"><div class="eyebrow">CONTEXT, NOT A CRYSTAL BALL</div><h2>What’s happening outside the idea?</h2><p>AI-led research puts your idea in context. Sources can be incomplete or wrong; desk research is not customer validation.</p></div>${i.tier === "basic" ? `<div class="research-upsell"><span class="large-icon">${icon("globe", 32)}</span><h3>Look beyond your own assumptions.</h3><p>Basic starts with your answers. Go deeper for AI-led research into alternatives, customer signals, and the questions you might not know to ask.</p>${button("Explore a deeper level " + icon("arrow", 16), "upgrade", "button primary")}<small>Free during the beta. Your work carries forward.</small></div>` : i.reports.length ? i.reports.map(r => `<article class="research-report">${r.demo ? '<div class="notice warning">Demo only — no live searches or real market findings.</div>' : pill("AI-led research · " + formatDate(r.createdAt), "green")}<h3>${r.kind === "advanced" ? "Deep opportunity research" : "Market and alternatives research"}</h3><div class="research-body">${richText(r.text)}</div>${r.sources.length ? `<div class="source-list"><h4>${r.sources.length} source${r.sources.length === 1 ? "" : "s"}</h4>${r.sources.map(s => { const url = safeUrl(s.url); return url ? `<a href="${e(url)}" target="_blank" rel="noopener noreferrer"><span>${icon("globe", 16)}<span>${e(s.title)}<small>${e(new URL(url).hostname)} · accessed ${formatDate(s.accessedAt)}</small></span></span>${icon("external", 15)}</a>` : ""; }).join("")}</div>` : ""}</article>`).join("") : `<div class="empty-state">${icon(i.status === "researching" ? "telescope" : "globe", 34)}<h3>${i.status === "researching" ? "The research is underway." : "First, a little context from you."}</h3><p>${i.status === "researching" ? "Your progress is saved. You can leave this idea and return while the research job continues." : "After the first two answers, the AI will investigate your idea before asking more focused questions."}</p>${i.status === "researching" ? '<span class="loading-dots"><i></i><i></i><i></i></span>' : ""}</div>`}`;
+  }
+  function validation(i: Idea) {
+    return `<div class="panel-intro"><div class="eyebrow">LESS BUILDING. MORE LEARNING.</div><h2>Your next moves.</h2><p>Test the riskiest assumption first. These are proposed experiments, not completed research or guaranteed outcomes.</p></div>${i.experiments.length ? `<div class="validation-progress"><strong>${i.experiments.filter(e => e.done).length} of ${i.experiments.length}</strong> experiments completed<span>Small steps. Useful evidence.</span></div>${i.experiments.map((ex, n) => `<article class="experiment-card ${ex.done ? "done" : ""}"><div class="experiment-header"><button class="task-check ${ex.done ? "checked" : ""}" data-action="experiment" data-experiment="${e(ex.id)}" aria-label="${ex.done ? "Mark incomplete" : "Mark complete"}: ${e(ex.title)}" ${isBusy(i) ? "disabled" : ""}>${ex.done ? icon("check", 16) : `<span>${n + 1}</span>`}</button><div><h3>${e(ex.title)}</h3><span>${e(ex.effort)} ${pill(ex.priority === "high" ? "Start here" : "Next", ex.priority === "high" ? "amber" : "neutral")}</span></div></div><dl><dt>What you’re testing</dt><dd>${e(ex.hypothesis)}</dd><dt>What to do</dt><dd>${e(ex.steps)}</dd><dt>Decide before you test</dt><dd class="metric">${e(ex.metric)}</dd></dl></article>`).join("")}` : `<div class="empty-state">${icon("target", 34)}<h3>A plan to learn before you build.</h3><p>Complete the conversation, or create an early draft, to get prioritized experiments with clear decision thresholds.</p>${button("Create a draft now " + icon("arrow", 16), "finish", "button secondary", isBusy(i) ? "disabled" : "")}</div>`}`;
+  }
+  function chat(i: Idea) {
+    const config = TIERS[i.tier];
+    return `<section class="chat-panel ${mobileTab === "chat" ? "mobile-visible" : ""}" aria-label="Guided interview"><div class="chat-heading"><div class="coach-avatar">${icon("spark", 20)}</div><div><strong>Your thinking partner</strong><span>${i.status === "researching" ? "Researching your opportunity" : "One good question at a time"}</span></div><span class="online-dot"></span></div><div class="interview-progress"><div><span>${i.status === "ready" ? "Conversation complete" : "Shaping the foundation"}</span><span>${Math.min(i.answerCount, config.max)} / ${config.max}</span></div><div class="progress-track"><i style="width:${Math.min(100, i.answerCount / config.max * 100)}%"></i></div></div>
+      <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation">${i.messages.map((m, index) => `<div class="message message-${m.role}">${m.role === "assistant" ? '<span class="message-label">' + icon("spark", 12) + " BEFOREBUILD</span>" : m.role === "user" ? '<span class="message-label">YOU</span>' : ""}<div class="message-content ${index === i.messages.length - 1 ? "latest" : ""}">${richText(m.text)}</div></div>`).join("")}${isBusy(i) ? `<div class="thinking-message"><span class="loading-dots"><i></i><i></i><i></i></span><span>${e(i.statusLabel)}</span></div>` : ""}</div>
+      <div class="chat-composer">${i.error ? `<div class="notice error" role="alert">${e(i.error)}${button("Retry", "retry", "text-button")}</div>` : ""}${i.status === "ready" ? `<div class="complete-note">${icon("check", 18)}<span><strong>Your draft is ready to test.</strong> Edit the canvas, review your assumptions, or go deeper.</span></div><div class="composer-complete-actions">${button("See the validation plan " + icon("arrow", 15), "validation-tab", "button primary")}</div>` : `<form id="chat-form"><label class="sr-only" for="chat-input">Your answer</label><textarea id="chat-input" rows="3" maxlength="4000" placeholder="Think out loud. There’s no perfect answer." ${isBusy(i) ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-toolbar">${button("I’m not sure yet", "unsure", "text-button unsure-button", `type="button" ${isBusy(i) ? "disabled" : ""}`)}<button class="send-button" type="submit" aria-label="Send answer" ${isBusy(i) || !draft.trim() ? "disabled" : ""}>${icon("arrow", 20)}</button></div></form>${i.questionHint && !isBusy(i) ? `<details class="answer-help"><summary>${icon("bulb", 13)} A little help answering</summary><p>${e(i.questionHint)}</p></details>` : ""}${i.suggestions.length && !isBusy(i) ? `<div class="answer-suggestions"><small>Examples, not facts about your idea</small>${i.suggestions.map(s => button(e(s), "suggestion", "prompt-chip", `data-text="${e(s)}"`)).join("")}</div>` : ""}<div class="composer-bottom"><span>${icon("check", 12)} ${snapshot.viewer.demo ? snapshot.storageAvailable === false ? "Memory only — export to keep" : "Saved in this browser" : "Progress saved"}</span>${isBusy(i) ? button("Cancel", "cancel", "text-button") : button("Create draft now", "finish", "text-button")}</div>`}</div></section>`;
+  }
+  function workspace(i: Idea) {
+    const tabs = [{ id: "canvas", label: "Live canvas", count: 0, icon: "grid" }, { id: "assumptions", label: "Assumptions", count: i.challenges.length, icon: "flag" }, { id: "research", label: "Research", count: i.reports.filter(r => !r.demo).flatMap(r => r.sources).length, icon: "globe" }, { id: "validation", label: "Validation plan", count: i.experiments.length, icon: "target" }];
+    return `<main class="workspace-page"><div class="idea-header"><div class="idea-title-group">${button(icon("back", 17), "home", "icon-button", 'aria-label="Back to workspace"')}<div><button class="editable-title" data-action="rename" title="Rename idea"><h1>${e(i.title)}</h1>${icon("edit", 13)}</button><div class="idea-subtitle">${pill(TIERS[i.tier].label, "green")}<span>${isBusy(i) ? '<span class="status-dot amber"></span> ' + e(i.statusLabel) : icon("check", 12) + (snapshot.viewer.demo && snapshot.storageAvailable === false ? ' In-memory draft' : ' All changes saved')}</span></div></div></div><div class="idea-actions">${i.tier !== "advanced" ? button(icon("layers", 16) + " Go deeper", "upgrade", "button secondary small", isBusy(i) ? "disabled" : "") : ""}${button(icon("download", 16) + " Export", "export", "button secondary small")}</div></div>
+      ${snapshot.viewer.demo ? '<div class="workspace-demo-note">Interactive demo · scripted coaching · no live AI or web searches. Connect the backend to enable real research.</div>' : ""}
+      <div class="mobile-view-switch"><button class="${mobileTab === "chat" ? "active" : ""}" data-action="mobile-view" data-view="chat">${icon("chat", 16)} Conversation</button><button class="${mobileTab === "canvas" ? "active" : ""}" data-action="mobile-view" data-view="canvas">${icon("grid", 16)} Your canvas <span>${coverage(i)}/9</span></button></div>
+      <div class="workspace-split">${chat(i)}<section class="output-panel ${mobileTab === "canvas" ? "mobile-visible" : ""}" aria-label="Business model output"><div class="output-tabs" role="tablist" aria-label="Idea output">${tabs.map(t => `<button id="tab-${t.id}" class="output-tab ${tab === t.id ? "active" : ""}" role="tab" aria-controls="output-content" aria-selected="${tab === t.id}" data-action="tab" data-tab="${t.id}">${icon(t.icon, 15)}${t.label}${t.count ? `<span>${t.count}</span>` : ""}</button>`).join("")}</div><div class="output-content ${tab === "canvas" ? "canvas-content" : ""}" id="output-content" role="tabpanel" aria-labelledby="tab-${tab}">${tab === "canvas" ? canvas(i) : tab === "assumptions" ? challenges(i) : tab === "research" ? research(i) : validation(i)}</div></section></div></main>`;
+  }
+  function guide() {
+    return `<main class="page guide-page"><div class="eyebrow">AN IDEA IS A STARTING POINT</div><h1>Get clear. Then get going.</h1><p class="lead">BeforeBuild helps you turn “I could build this” into “I understand what I should test.”</p><div class="guide-steps">${[["01", "Start with the messy version", "Describe the person, the problem, or the product you’re imagining. You don’t need the right business vocabulary.", "bulb"], ["02", "Think it through together", "Answer one question at a time. Say “I’m not sure.” Watch your canvas take shape. Higher levels add research and deeper constructive challenges.", "chat"], ["03", "Test the business, not just the code", "Leave with a nine-part business model, visible assumptions, research where available, and a prioritized validation plan. You decide what to pursue.", "target"]].map(([n, title, text, ic]) => `<article><span class="guide-number">${n}</span>${icon(ic, 25)}<h3>${title}</h3><p>${text}</p></article>`).join("")}</div><section class="guide-levels"><h2>Three depths. The same starting point.</h2>${(Object.keys(TIERS) as Tier[]).map(t => `<div><span class="tier-icon ${t}">${icon(tierIcon(t), 22)}</span><strong>${TIERS[t].label}</strong><p>${TIERS[t].min}–${TIERS[t].max} questions. ${TIERS[t].research}</p>${pill(t === "basic" ? "Always free" : "Free in beta", "green")}</div>`).join("")}</section><section class="guide-trust"><h2>What the labels actually mean</h2><div><span class="evidence-dot founder"></span><p><strong>Founder input</strong>Something you told us. It is self-reported, not independently verified.</p></div><div><span class="evidence-dot research"></span><p><strong>Research</strong>A statement supported by a cited source. A source can still be incomplete, outdated, or wrong.</p></div><div><span class="evidence-dot assumption"></span><p><strong>Assumption</strong>A proposal or inference that still needs testing. A complete canvas is not proof of demand.</p></div></section><div class="notice">${snapshot.viewer.demo ? "This demo runs locally in your browser with a scripted interview. It never calls an AI service. Export your work for a portable copy; local storage may not be available in private browsing." : "Ideas are private to your account. Relevant idea content and answers are shared with the configured AI provider to generate responses. Research requires explicit consent and uses the provider’s web tools. Do not enter credentials, confidential customer records, or personal data."}</div>${button("Start with an idea " + icon("arrow", 17), "new", "button primary")}</main>`;
+  }
+  function settings() {
+    if (!snapshot.viewer.admin) return '<main class="page"><h1>Access restricted.</h1></main>';
+    const p = snapshot.pricing;
+    return `<main class="page settings-page"><div class="eyebrow">A SMALL, INTENTIONAL BETA</div><h1>Beta settings</h1><p>Choose who can join. Keep the business model flexible.</p>${snapshot.viewer.demo ? '<div class="notice warning">Demo controls only. No invitations are sent and no real access permissions are changed.</div>' : '<div class="notice">Adding an email grants access after verified sign-in. This app does not send an invitation email; share your beta URL separately.</div>'}<section class="settings-card"><div class="section-header"><div><h2>${icon("users", 20)} Email allowlist</h2><p>Only verified, allowed email addresses can use the beta.</p></div>${pill("Invite-only", "green")}</div><form id="invite-form" class="inline-form"><label class="sr-only" for="invite-email">Email to allow</label><input id="invite-email" type="email" placeholder="founder@example.com" required><button class="button primary" type="submit">${icon("plus", 16)} Add email</button></form><div class="invite-list">${snapshot.invites.map(inv => `<div><span>${icon("users", 16)}${e(inv.email)}</span>${pill(inv.active ? "Allowed" : "Revoked", inv.active ? "green" : "neutral")}${button(inv.active ? "Revoke" : "Restore", "invite-toggle", "text-button", `data-email="${e(inv.email)}" data-active="${!inv.active}"`)}</div>`).join("") || '<p class="empty-hint">Your allowlisted beta testers will appear here.</p>'}</div><small class="muted">Admin emails are managed in the server environment. Admins do not automatically get access to anyone else’s ideas.</small></section><section class="settings-card"><div class="section-header"><div><h2>${icon("wallet", 20)} Future per-idea pricing</h2><p>Configure prices now. No checkout, subscriptions, or charges during beta.</p></div>${pill("Billing disabled", "green")}</div><form id="pricing-form"><div class="pricing-fields"><label>Currency<select id="price-currency">${["USD", "INR", "EUR", "GBP"].map(c => `<option ${c === p.currency ? "selected" : ""}>${c}</option>`).join("")}</select></label><label>Intermediate / idea<input id="price-intermediate" type="number" min="0" step="0.01" max="10000" value="${p.intermediate / 100}" required></label><label>Advanced / idea<input id="price-advanced" type="number" min="0" step="0.01" max="10000" value="${p.advanced / 100}" required></label></div><div class="form-footer"><span class="muted">Basic stays free. All levels are free in this beta.</span><button class="button secondary" type="submit">Save configuration</button></div></form></section><section class="settings-card integration-note"><h2>${icon("shield", 20)} AI & data configuration</h2><p>Provider keys, model choices, daily usage limits, and admin emails live only in server-side environment variables. The initial AI adapter uses OpenAI; models and a Responses-compatible base URL are configurable.</p><p>Production storage uses Convex. Sign-in uses Clerk with a verified-email allowlist. The downloadable source includes the setup instructions.</p></section></main>`;
+  }
+  function render() {
+    if (destroyed) return;
+    const focused = document.activeElement as HTMLTextAreaElement | null;
+    const focusId = focused?.id; const selection = focused?.selectionStart;
+    const messages = root.querySelector(".messages"); const wasNearBottom = !messages || messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+    const oldScroll = messages?.scrollTop || 0;
+    if (selectedId && !current()) selectedId = null;
+    root.innerHTML = `<div class="app-shell ${selectedId ? "in-workspace" : ""}">${nav()}${navOpen ? '<button class="nav-backdrop" data-action="menu" aria-label="Close navigation"></button>' : ""}<div class="main-shell">${header()}${current() ? workspace(current()!) : view === "home" ? home() : view === "ideas" ? library() : view === "guide" ? guide() : settings()}</div></div>${toast ? `<div class="toast" role="status">${icon("info", 18)}<span>${e(toast)}</span>${button(icon("close", 15), "dismiss-toast", "icon-button", 'aria-label="Dismiss"')}</div>` : ""}`;
+    const log = root.querySelector(".messages"); if (log) log.scrollTop = wasNearBottom ? log.scrollHeight : oldScroll;
+    if (focusId) {
+      const replacement = document.getElementById(focusId) as HTMLTextAreaElement | null;
+      if (replacement && !replacement.disabled && ["chat-input", "raw-idea"].includes(focusId)) { replacement.focus({ preventScroll: true }); if (selection !== null && selection !== undefined) replacement.setSelectionRange(selection, selection); }
+    }
+  }
+  function showDialog(title: string, body: string, cls = "") {
+    root.querySelectorAll("dialog").forEach(d => d.remove());
+    const dialog = document.createElement("dialog"); dialog.className = `dialog ${cls}`;
+    dialog.innerHTML = `<div class="dialog-header"><h2>${e(title)}</h2>${button(icon("close", 19), "close-dialog", "icon-button", 'aria-label="Close dialog"')}</div>${body}`;
+    root.append(dialog); dialog.addEventListener("close", () => dialog.remove()); dialog.addEventListener("click", event => { if (event.target === dialog && event.offsetX >= 0 && event.offsetY >= 0 && (event.offsetX > dialog.clientWidth || event.offsetY > dialog.clientHeight)) dialog.close(); });
+    dialog.showModal();
+  }
+  function upgradeDialog(i: Idea) {
+    selectedTier = i.tier === "basic" ? "intermediate" : "advanced";
+    showDialog("Go deeper, without starting over.", `<p class="dialog-lead">Your answers, canvas edits, and decisions come with you. All levels are free during the beta.</p><form id="upgrade-form">${tiers(false, i.tier)}<label class="consent"><input id="upgrade-consent" type="checkbox" required><span>I agree to share my idea and relevant answers with the AI provider for web research. I won’t include secrets or personal customer data.</span></label><div class="dialog-footer"><button class="button primary" type="submit">Continue at ${TIERS[selectedTier].label} ${icon("arrow", 16)}</button></div></form>`, "wide-dialog");
+  }
+  function editorRow(item: CanvasItem) {
+    return `<div class="editor-row" data-item-id="${e(item.id)}"><textarea maxlength="1200" rows="3" aria-label="Canvas point">${e(item.text)}</textarea><div><label>Based on <select class="evidence-select" aria-label="Evidence type">${[["founder", "Founder input"], ["assumption", "Assumption"], ["research", "Research (with sources)"]].map(([v, label]) => `<option value="${v}" ${item.evidence === v ? "selected" : ""} ${v === "research" && !item.sourceIds.length ? "disabled" : ""}>${label}</option>`).join("")}</select></label>${button(icon("trash", 15), "remove-point", "icon-button", 'type="button" aria-label="Remove point"')}</div></div>`;
+  }
+  function editDialog(i: Idea, block: BlockKey) {
+    if (isBusy(i)) { notify("Finish the current response before editing your canvas."); return; }
+    const b = BLOCKS.find(x => x.key === block)!;
+    showDialog(b.label, `<p class="dialog-lead">${e(b.hint)} This section becomes yours to maintain; the AI will not replace your edits.</p><form id="edit-block-form" data-block="${block}"><div id="editor-rows">${(i.canvas[block].length ? i.canvas[block] : [{ id: uid(), text: "", evidence: "assumption" as const, sourceIds: [] }]).map(editorRow).join("")}</div>${button(icon("plus", 15) + " Add a point", "add-point", "text-button", 'type="button"')}<p class="field-help">Founder input is self-reported. Research labels require existing source links; new points start as assumptions.</p><div class="dialog-footer"><button type="submit" class="button primary">${icon("check", 16)} Save section</button></div></form>`);
+  }
+  function printIdea(i: Idea) {
+    const w = window.open("", "_blank"); if (!w) { notify("Allow pop-ups to open the print view, or export Markdown instead."); return; }
+    w.document.write(`<!doctype html><html><head><title>${e(i.title)} · BeforeBuild</title><style>body{font:14px/1.7 system-ui;max-width:900px;margin:40px auto;color:#263a33;padding:20px}h1{font-size:30px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}button{padding:10px 20px;margin-bottom:20px}@media print{button{display:none}body{margin:0}a{color:inherit}}</style></head><body><button onclick="window.print()">Print / save as PDF</button><pre>${e(toMarkdown(i))}</pre></body></html>`); w.document.close();
+  }
+  async function onClick(event: Event) {
+    if ((event.target as Element).closest("a")) return;
+    const target = (event.target as Element).closest<HTMLElement>("[data-action]"); if (!target || target.matches(":disabled")) return;
+    const action = target.dataset.action; const i = current();
+    await attempt(async () => {
+      if (["home", "new", "ideas", "guide", "settings"].includes(action || "")) { selectedId = null; view = action === "new" ? "home" : action as typeof view; navOpen = false; render(); if (action === "new") document.getElementById("raw-idea")?.focus(); }
+      else if (action === "menu") { navOpen = !navOpen; render(); }
+      else if (action === "open") { selectedId = target.dataset.id!; view = "home"; tab = "canvas"; draft = ""; navOpen = false; render(); const log = root.querySelector(".messages"); if (log) log.scrollTop = log.scrollHeight; }
+      else if (action === "sample" && backend.seedExample) { selectedId = await backend.seedExample(); tab = "canvas"; render(); }
+      else if (action === "tier") {
+        selectedTier = target.dataset.tier as Tier;
+        if (target.closest("#upgrade-form")) { root.querySelectorAll(".dialog .tier-card").forEach(el => { const chosen = (el as HTMLElement).dataset.tier === selectedTier; el.classList.toggle("selected", chosen); el.setAttribute("aria-pressed", String(chosen)); el.querySelector(".radio-indicator")!.innerHTML = chosen ? "<span></span>" : ""; }); const submit = root.querySelector("#upgrade-form button[type=submit]"); if (submit) submit.innerHTML = `Continue at ${TIERS[selectedTier].label} ${icon("arrow", 16)}`; }
+        else render();
+      }
+      else if (action === "prompt") { rawIdea = target.dataset.prompt!; render(); document.getElementById("raw-idea")?.focus(); }
+      else if (action === "tab") { tab = target.dataset.tab as typeof tab; render(); }
+      else if (action === "mobile-view") { mobileTab = target.dataset.view!; render(); }
+      else if (action === "suggestion") { draft = target.dataset.text || ""; render(); document.getElementById("chat-input")?.focus(); }
+      else if (action === "unsure" && i) { draft = ""; await backend.send(i.id, "I’m not sure yet."); }
+      else if (action === "finish" && i) { showDialog("Create a draft with what we know?", `<p class="dialog-lead">You can stop the interview here. Unanswered areas will be filled with clearly labeled assumptions, plus tests to investigate them.${i.tier !== "basic" ? " This level still runs its research before finalizing." : ""}</p><div class="dialog-footer">${button("Keep exploring", "close-dialog", "button secondary")}${button("Create my draft " + icon("arrow", 16), "confirm-finish", "button primary")}</div>`); }
+      else if (action === "confirm-finish" && i) { root.querySelector("dialog")?.close(); await backend.send(i.id, "", true); }
+      else if (action === "edit-block" && i) editDialog(i, target.dataset.block as BlockKey);
+      else if (action === "add-point") { const rows = root.querySelector("#editor-rows"); if (rows && rows.children.length < 12) rows.insertAdjacentHTML("beforeend", editorRow({ id: uid(), text: "", evidence: "assumption", sourceIds: [] })); }
+      else if (action === "remove-point") target.closest(".editor-row")?.remove();
+      else if (action === "close-dialog") target.closest("dialog")?.close();
+      else if (action === "upgrade" && i) upgradeDialog(i);
+      else if (action === "decide" && i) { await backend.decide(i.id, target.dataset.challenge!, target.dataset.decision as "accept" | "revise" | "decline"); notify(target.dataset.decision === "revise" ? "Decision saved. Edit the relevant canvas section to reflect your new direction." : "Your decision is saved. You stay in charge."); }
+      else if (action === "experiment" && i) await backend.toggleExperiment(i.id, target.dataset.experiment!);
+      else if (action === "validation-tab") { tab = "validation"; mobileTab = "canvas"; render(); }
+      else if (action === "retry" && i) await backend.retry(i.id);
+      else if (action === "cancel" && i) await backend.cancel(i.id);
+      else if (action === "rename" && i) showDialog("Give this idea a name.", `<form id="rename-form"><label class="field-label" for="idea-name">Idea name</label><input id="idea-name" value="${e(i.title)}" maxlength="100" required><div class="dialog-footer"><button class="button primary" type="submit">Save name</button></div></form>`);
+      else if (action === "delete") { const id = target.dataset.id!; const idea = snapshot.ideas.find(i => i.id === id); if (idea) showDialog("Delete this idea?", `<p class="dialog-lead">“${e(idea.title)}” and its saved conversation will be deleted. Export a copy first if you need one.</p><div class="dialog-footer">${button("Keep idea", "close-dialog", "button secondary")}${button("Delete idea", "confirm-delete", "button danger", `data-id="${e(id)}"`)}</div>`); }
+      else if (action === "confirm-delete") { await backend.remove(target.dataset.id!); notify("Idea deleted."); }
+      else if (action === "export" && i) showDialog("Take your thinking with you.", `<p class="dialog-lead">Export the canvas, research, assumptions, validation plan, and conversation. Your exports include evidence labels and source links.</p><div class="export-options">${button(icon("book", 22) + '<span><strong>Markdown</strong><small>Readable in Notion, Obsidian, and text editors</small></span>' + icon("download", 18), "export-md", "export-option")}${button(icon("copy", 22) + '<span><strong>JSON</strong><small>A portable structured copy of your idea</small></span>' + icon("download", 18), "export-json", "export-option")}${button(icon("print", 22) + '<span><strong>Print-friendly report</strong><small>Print or save a PDF using your browser</small></span>' + icon("external", 18), "print", "export-option")}</div>`);
+      else if (action === "export-md" && i) exportIdea(i, "markdown");
+      else if (action === "export-json" && i) exportIdea(i, "json");
+      else if (action === "print" && i) printIdea(i);
+      else if (action === "invite-toggle") await backend.invite(target.dataset.email!, target.dataset.active === "true");
+      else if (action === "logout") await backend.logout();
+      else if (action === "dismiss-toast") { toast = ""; render(); }
+      else if (action === "demo-info") showDialog("A real interface. A clearly labeled demo.", '<p class="dialog-lead">This preview works without API keys. You can explore a scripted interview, edit the live canvas, change levels, save multiple ideas, make decisions, and export your work.</p><div class="notice warning">It does not call AI, perform live research, authenticate users, or enforce real invite access. Data is saved in this browser only.</div><p class="dialog-lead">The source also includes the connected Next.js + Convex application. Configure Clerk and an AI API key to run the private beta. Demo mode must be turned off before inviting real users.</p>');
+    });
+  }
+  async function onSubmit(event: Event) {
+    const form = event.target as HTMLFormElement; event.preventDefault(); const i = current();
+    await attempt(async () => {
+      if (form.id === "new-idea-form") {
+        if (sending) return;
+        rawIdea = (form.querySelector("#raw-idea") as HTMLTextAreaElement).value;
+        consent = !!(form.querySelector("#research-consent") as HTMLInputElement)?.checked;
+        sending = true;
+        try { selectedId = await backend.create(rawIdea, selectedTier, consent); rawIdea = ""; draft = ""; tab = "canvas"; mobileTab = "chat"; } finally { sending = false; render(); }
+      } else if (form.id === "chat-form" && i) {
+        const answer = (form.querySelector("textarea") as HTMLTextAreaElement).value.trim(); if (!answer) return;
+        draft = ""; (form.querySelector("textarea") as HTMLTextAreaElement).value = ""; const sendButton = form.querySelector<HTMLButtonElement>(".send-button"); if (sendButton) sendButton.disabled = true; try { await backend.send(i.id, answer); } catch (error) { draft = answer; throw error; }
+      } else if (form.id === "edit-block-form" && i) {
+        const block = form.dataset.block as BlockKey;
+        const items: CanvasItem[] = Array.from(form.querySelectorAll<HTMLElement>(".editor-row")).map(row => {
+          const id = row.dataset.itemId!; const old = i.canvas[block].find(x => x.id === id);
+          return { id, text: (row.querySelector("textarea") as HTMLTextAreaElement).value.trim(), evidence: (row.querySelector("select") as HTMLSelectElement).value as CanvasItem["evidence"], sourceIds: old?.sourceIds || [], edited: true };
+        }).filter(item => item.text);
+        await backend.editBlock(i.id, block, items); notify("Section saved. Your edits stay yours.");
+      } else if (form.id === "rename-form" && i) { await backend.rename(i.id, (form.querySelector("input") as HTMLInputElement).value); }
+      else if (form.id === "upgrade-form" && i) { const agree = (form.querySelector("#upgrade-consent") as HTMLInputElement).checked; await backend.upgrade(i.id, selectedTier, agree); notify(`Now exploring at ${TIERS[selectedTier].label} level. Your previous work is kept.`); }
+      else if (form.id === "invite-form") { const email = (form.querySelector("input") as HTMLInputElement).value; await backend.invite(email, true); notify(snapshot.viewer.demo ? "Added to the demo allowlist. No email was sent." : "Access allowed. Share your beta URL with this person; no email was sent."); }
+      else if (form.id === "pricing-form") {
+        const intermediate = Math.round(Number((form.querySelector("#price-intermediate") as HTMLInputElement).value) * 100);
+        const advanced = Math.round(Number((form.querySelector("#price-advanced") as HTMLInputElement).value) * 100);
+        if (![intermediate, advanced].every(n => Number.isFinite(n) && n >= 0 && n <= 1000000)) throw new Error("Use valid non-negative prices up to 10,000.");
+        await backend.savePricing({ enabled: false, currency: (form.querySelector("#price-currency") as HTMLSelectElement).value, intermediate, advanced }); notify("Configuration saved. Billing remains disabled.");
+      }
+    });
+  }
+  function onInput(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.id === "raw-idea") rawIdea = input.value;
+    if (input.id === "chat-input") { draft = input.value; const send = root.querySelector<HTMLButtonElement>(".send-button"); if (send) send.disabled = !draft.trim(); }
+    if (input.id === "research-consent") consent = input.checked;
+    if (input.id === "idea-search") root.querySelectorAll<HTMLElement>(".library-grid .idea-card").forEach(card => { card.hidden = !card.dataset.search?.includes(input.value.toLowerCase()); });
+  }
+  function onKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement;
+    if (target.id === "chat-input" && event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); (target.closest("form") as HTMLFormElement).requestSubmit(); }
+    if (target.classList.contains("canvas-block") && ["Enter", " "].includes(event.key)) { event.preventDefault(); target.click(); }
+    if (target.getAttribute("role") === "tab" && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+      event.preventDefault(); const tabs = [...root.querySelectorAll<HTMLElement>('[role="tab"]')]; const index = tabs.indexOf(target); const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; const id = next.id; next.click(); requestAnimationFrame(() => document.getElementById(id)?.focus());
+    }
+  }
+  root.addEventListener("click", onClick); root.addEventListener("submit", onSubmit); root.addEventListener("input", onInput); root.addEventListener("keydown", onKeydown);
+  const unsubscribe = backend.subscribe(() => { snapshot = backend.snapshot(); render(); }); render();
+  return () => { destroyed = true; unsubscribe(); clearTimeout(toastTimer); root.removeEventListener("click", onClick); root.removeEventListener("submit", onSubmit); root.removeEventListener("input", onInput); root.removeEventListener("keydown", onKeydown); root.innerHTML = ""; };
+}

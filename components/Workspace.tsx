@@ -1,0 +1,30 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useClerk } from "@clerk/nextjs";
+import { useConvex, useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
+import type { Backend, Invite, Pricing, Viewer } from "../lib/backend";
+import type { Idea } from "../lib/model";
+import { createDemoBackend } from "../lib/demo";
+import { mountWorkspace } from "../lib/ui";
+import { createLiveBackend } from "./live-backend";
+function Surface({ backend }: { backend: Backend }) {
+  const element = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (element.current) return mountWorkspace(element.current, backend); }, [backend]);
+  return <div ref={element}><div className="auth-loading">Opening your workspace…</div></div>;
+}
+export function DemoWorkspace() {
+  const [backend, setBackend] = useState<Backend | null>(null);
+  useEffect(() => { setBackend(createDemoBackend()); }, []);
+  return backend ? <Surface backend={backend} /> : <div className="auth-loading">Opening the interactive demo…</div>;
+}
+export function LiveWorkspace({ viewer }: { viewer: Viewer }) {
+  const client = useConvex(); const { signOut } = useClerk();
+  const ideas = useQuery(api.ideas.list) as Idea[] | undefined;
+  const pricing = useQuery(api.settings.getPricing) as Pricing | undefined;
+  const invites = useQuery(api.access.listInvites, viewer.admin ? {} : "skip") as Invite[] | undefined;
+  const backend = useMemo(() => createLiveBackend(client, viewer, () => signOut({ redirectUrl: "/" })), [client, viewer.email, viewer.name, viewer.admin, signOut]);
+  useEffect(() => { if (ideas && pricing) backend.push({ ideas, pricing, invites: invites || [], viewer }); }, [backend, ideas, pricing, invites, viewer]);
+  if (!ideas || !pricing) return <div className="auth-loading">Loading your saved ideas…</div>;
+  return <Surface backend={backend} />;
+}

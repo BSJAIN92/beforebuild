@@ -1,0 +1,598 @@
+# BeforeBuild Deployment Execution Plan
+
+## Purpose
+
+Deploy BeforeBuild as an invite-only private beta using a public GitHub source repository, Vercel, Convex, Clerk, and OpenAI.
+
+The product source is located at:
+
+```text
+beforebuild-source/beforebuild
+```
+
+Treat that directory as the application and Git repository root.
+
+The copy of this file inside that repository root is authoritative. A workspace-level copy was retained as a safety backup when this file was first added to Git, but agents must read and update the repository copy from Step 3 onward.
+
+The GitHub repository is intentionally **public** by user decision. Anyone can read, copy, and inspect committed source and history. Never commit credentials, private user data, real idea content, or operational secrets. Private-beta access refers to the running application, which must still enforce verified-email allowlisting.
+
+## Agent persona
+
+Act as a careful deployment engineer for a private SaaS beta. Protect user data and credentials, keep development and production separate, verify every result, and report failures honestly.
+
+## Mandatory execution protocol
+
+These rules apply to every agent using this file.
+
+1. At the start of every session, read this entire file and inspect the **Progress ledger**.
+2. Verify the recorded state against the repository before trusting it. For example, check Git status, expected files, and the last recorded evidence.
+3. Continue from the first step whose status is not `COMPLETE`. Do not repeat completed work unless verification shows that its result is missing or broken.
+4. Before doing **each numbered step**, explain the exact action, its expected result, and any risk in plain language.
+5. Ask the user for approval for that one step. Do not combine approvals for several steps.
+6. Do not execute the step until the user explicitly approves it.
+7. After executing the approved step, verify its acceptance check.
+8. Immediately update this file before asking approval for the next step. Record the status, date, evidence, files changed, commands run, and any blocker.
+9. Commit the updated progress file with the related code change when a commit is part of the approved step. Otherwise, leave it saved in the working tree.
+10. Never record secret values in this file, terminal output committed to Git, issue trackers, or chat. Record only whether a secret was configured and where.
+11. If a command fails, mark the step `BLOCKED` or `IN PROGRESS`, save the failure summary, and ask the user before trying a materially different action.
+12. Never mark a step `COMPLETE` until its acceptance check passes.
+
+### Allowed status values
+
+- `NOT STARTED`
+- `AWAITING APPROVAL`
+- `IN PROGRESS`
+- `BLOCKED`
+- `COMPLETE`
+
+### Progress update format
+
+Use this format in the relevant ledger row or its notes:
+
+```text
+Status:
+Updated:
+Agent/session:
+Approval received:
+Actions performed:
+Commands run:
+Files changed:
+Verification evidence:
+Blocker or next action:
+```
+
+## Important findings from the initial review
+
+- The source is not currently inside a Git repository.
+- There is no `package-lock.json`.
+- Dependencies are not installed.
+- Checked-in Convex generated files are bootstrap placeholders and must be regenerated against a real project.
+- The complete Next.js build has not passed yet.
+- Live Clerk, Convex, OpenAI, and Vercel integration has not been tested.
+- On Windows, `npm test` currently fails when local TypeScript is absent because `scripts/test.mjs` tries to launch `npm` instead of `npm.cmd`.
+- Billing is not implemented. `BILLING_ENABLED` must remain `false`.
+- Connected mode requires Clerk and OpenAI in addition to GitHub, Vercel, and Convex.
+- Production Clerk authentication requires a custom domain; do not plan to launch only on a generic `*.vercel.app` address.
+
+## Required user-controlled inputs
+
+Agents must request only the input needed for the next approved step. Do not ask for all secrets at once.
+
+- GitHub repository destination, visibility decision, and account access
+- Convex development and production project access
+- Clerk development and production application access
+- OpenAI development and production API project access
+- Vercel project and team access
+- Final custom domain and DNS access
+- Verified owner/admin email
+- Initial tester email
+- Spending limits acceptable to the user
+
+Secret values must be entered directly into the correct service dashboard or secure environment configuration. They must not be committed.
+
+## Progress ledger
+
+Update this table immediately after every approved step.
+
+| Step | Description | Status | Last updated | Evidence / next action |
+| --- | --- | --- | --- | --- |
+| 0 | Resume check and baseline confirmation | COMPLETE | 2026-09-12 | Baseline verified. Application directory exists; Git is not initialized; `package-lock.json` and `node_modules` are absent. Node.js is v24.19.0 rather than the required Node.js 22 baseline. Next action: request approval for Step 1. |
+| 1 | Confirm repository root and deployment scope | COMPLETE | 2026-09-12 | Confirmed `beforebuild-source/beforebuild` as the future repository root and the target as the connected, invite-only private beta. Next action: request separate approval for Step 2. |
+| 2 | Initialize local Git repository | COMPLETE | 2026-09-12 | Secret scan found no likely real credential; environment-file ignore coverage was tightened; Git was initialized on empty `main`; 46 intended files are untracked and no commit exists. Next action: request separate approval and GitHub destination for Step 3. |
+| 3 | Create and connect public GitHub repository | IN PROGRESS | 2026-09-12 | User approved public `BSJAIN92/beforebuild`; repeat secret scan is clear; authoritative plan copy added to the app root. Initial commit, repository creation, push, and remote verification remain. |
+| 4 | Install dependencies and create lockfile | NOT STARTED | — | Await Step 3. |
+| 5 | Fix and run the local automated checks | NOT STARTED | — | Await Step 4. |
+| 6 | Create and configure Convex development deployment | NOT STARTED | — | Await Step 5 and user access. |
+| 7 | Configure Clerk development authentication | NOT STARTED | — | Await Step 6 and user access. |
+| 8 | Verify the connected application locally | NOT STARTED | — | Await Step 7. |
+| 9 | Run live access, ownership, resilience, and AI checks | NOT STARTED | — | Await Step 8. |
+| 10 | Create isolated production services | NOT STARTED | — | Await Step 9 and user approval of production settings. |
+| 11 | Configure the custom domain and production Clerk | NOT STARTED | — | Await Step 10 and DNS access. |
+| 12 | Import GitHub repository into Vercel | NOT STARTED | — | Await Step 11. |
+| 13 | Configure Vercel and Convex production deployment | NOT STARTED | — | Await Step 12. |
+| 14 | Deploy and verify a hosted preview | NOT STARTED | — | Await Step 13. |
+| 15 | Deploy and verify production | NOT STARTED | — | Await Step 14 and explicit production approval. |
+| 16 | Configure monitoring, limits, rollback, and beta operations | NOT STARTED | — | Await Step 15. |
+| 17 | Final handoff and release record | NOT STARTED | — | Await Step 16. |
+
+## Step-by-step execution
+
+### Step 0 — Resume check and baseline confirmation
+
+Progress record:
+
+```text
+Status: COMPLETE
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user asked a subagent to start the first milestone, and the parent agent limited that approval to Step 0.
+Actions performed: Read this execution plan in full; inspected the application directory, Git state, lockfile, dependency directory, and installed Node.js/npm versions; compared the results with the ledger.
+Commands run: Get-Content -LiteralPath 'DEPLOYMENT_EXECUTION_PLAN.md' -Raw (from the workspace root); Get-Location; Get-ChildItem -Force; git status --short --branch; Test-Path -LiteralPath 'package-lock.json'; Test-Path -LiteralPath 'node_modules'; node --version; npm --version (baseline commands run from beforebuild-source/beforebuild).
+Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this progress record. No product files or external services were changed.
+Verification evidence: The application path is D:\One Drive\OneDrive\Self Docs\Bhavya\Startup\BMC\GPT 6 Web Source\beforebuild-source\beforebuild. Expected application items including package.json, app, components, convex, and lib exist. Git reported "not a git repository". Both package-lock.json and node_modules returned False. Node.js reported v24.19.0 and npm reported 12.0.2. The prior ledger accurately stated that Git, the lockfile, and dependencies were absent. The additional Node.js version mismatch is now recorded.
+Blocker or next action: No Step 0 blocker. Step 1 is next and requires separate user approval. Step 1 must confirm the proposed repository root and connected invite-only beta scope. Before dependency work in Step 4, switch to or otherwise use Node.js 22 as required by the plan.
+```
+
+Before acting, inspect:
+
+```powershell
+Get-Location
+Get-ChildItem -Force
+git status --short --branch
+Test-Path package-lock.json
+Test-Path node_modules
+node --version
+npm --version
+```
+
+If Git is not initialized, record that rather than treating the Git command failure as a product failure. Compare the results with the progress ledger and continue from the first incomplete step.
+
+Acceptance check:
+
+- The agent has identified the real current state.
+- Any mismatch with the ledger has been recorded.
+- No files or external services were changed during this check.
+
+### Step 1 — Confirm repository root and deployment scope
+
+Progress record:
+
+```text
+Status: COMPLETE
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user explicitly approved Step 1 only.
+Actions performed: Read this execution plan in full and confirmed Step 0 was COMPLETE; inspected the proposed repository root's top-level layout; verified the required application files and directories exist; checked the workspace and application READMEs for the intended connected mode, allowlisted access, and private-beta language.
+Commands run: Get-Content -LiteralPath 'DEPLOYMENT_EXECUTION_PLAN.md' -Raw; Get-ChildItem -LiteralPath 'beforebuild-source\beforebuild' -Force | Select-Object Name, PSIsContainer; Test-Path checks for package.json, app, components, convex, and lib; rg -n --ignore-case "connected|demo mode|invite|allowlist|private beta" against the workspace and application README files.
+Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this progress record. Git was not initialized and no product files or external services were changed.
+Verification evidence: `beforebuild-source/beforebuild` directly contains package.json, app, components, convex, lib, configuration files, scripts, and tests, so it is the correct application and future repository root. The READMEs distinguish the standalone scripted demo from connected mode and document verified-email allowlisting, real users, storage, AI, and invited testers. This matches the user's requested deployment through GitHub, Vercel, and Convex and the plan's connected invite-only private-beta target.
+Blocker or next action: No Step 1 blocker. Step 2 is next and requires separate user approval. Step 2 may inspect and update ignore rules, scan for likely secrets, initialize Git in the confirmed application root, and report the proposed first-commit file list; it must not commit yet.
+```
+
+Confirm with the user that `beforebuild-source/beforebuild` will become the repository root and that the target is a connected, invite-only beta rather than the standalone demo.
+
+Acceptance check:
+
+- Repository root and private-beta scope are recorded in the progress ledger.
+
+### Step 2 — Initialize the local Git repository
+
+Progress record:
+
+```text
+Status: COMPLETE
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user explicitly approved Step 2 only.
+Actions performed: Read this execution plan in full and verified Steps 0 and 1 were COMPLETE; inspected .gitignore; searched filenames and file contents for likely private keys and provider credentials while printing only paths, variable names, and classifications; confirmed apparent matches were blank/comment examples, a three-character placeholder, README examples, or test data; expanded environment-file ignore coverage while preserving .env.example; initialized Git with main as the initial branch; reviewed all 46 proposed first-commit files.
+Commands run: Get-Content of this plan and .gitignore; Get-ChildItem filename scan for environment/key/credential files; rg path-only scans for private-key blocks, credential-shaped tokens, and sensitive variable assignments; metadata-only PowerShell classifiers; git init -b main; git status --short --branch --untracked-files=all; git check-ignore -v against secret/generated examples; git ls-files --others --exclude-standard checks for .env.example and ignored environment files. Two metadata classifier attempts had PowerShell parsing errors and changed nothing; corrected commands succeeded. One check-ignore interpretation message incorrectly called the negated .env.example rule an error; git status and git ls-files directly confirmed the file is trackable.
+Files changed: beforebuild-source/beforebuild/.gitignore; beforebuild-source/beforebuild/.git/ metadata created by Git initialization; DEPLOYMENT_EXECUTION_PLAN.md updated with this record. No commit, remote, GitHub repository, dependency, product-code file, or external service was created or changed.
+Verification evidence: Git reports "No commits yet on main" from the confirmed application root. .env, .env.local, .env.production, .env.development.local, node_modules, .next, .vercel, .test-build, dist, and *.tsbuildinfo examples are ignored. .env.example remains visible as an intended untracked file. The secret scan found no likely real secret or private-key block. git status exposes only the 46 intended files listed below. The .gitignore change replaced narrow environment patterns with .env* plus !.env.example so production-style local environment files cannot be committed accidentally.
+Blocker or next action: No Step 2 blocker. Step 3 is next and requires separate user approval plus the GitHub account or organization and desired repository name. Do not commit, add a remote, create GitHub resources, or push until that approval and destination are supplied.
+```
+
+Proposed first-commit file list (46 files; no commit has been created):
+
+```text
+.env.example
+.gitignore
+README.md
+app/error.tsx
+app/globals.css
+app/layout.tsx
+app/page.tsx
+components/ClientRoot.tsx
+components/Providers.tsx
+components/Workspace.tsx
+components/live-backend.ts
+convex.json
+convex/_generated/api.d.ts
+convex/_generated/api.js
+convex/_generated/dataModel.d.ts
+convex/_generated/server.d.ts
+convex/_generated/server.js
+convex/access.ts
+convex/auth.config.ts
+convex/guards.ts
+convex/ideas.ts
+convex/jobs.ts
+convex/providers.ts
+convex/runner.ts
+convex/schema.ts
+convex/settings.ts
+docs/DEPLOYMENT.md
+docs/TESTING.md
+lib/ai-contract.ts
+lib/backend.ts
+lib/demo.ts
+lib/export.ts
+lib/icons.ts
+lib/model.ts
+lib/ui.ts
+next-env.d.ts
+next.config.ts
+package.json
+proxy.ts
+scripts/build-demo.mjs
+scripts/test.mjs
+tests/browser_smoke.py
+tests/core.test.cjs
+tests/provider.test.cjs
+tsconfig.core.json
+tsconfig.json
+```
+
+Actions:
+
+1. Inspect `.gitignore` and add any missing generated or secret paths.
+2. Search the working tree for likely secrets.
+3. Initialize Git in the application root.
+4. Review the exact files that would be included in the first commit.
+5. Do not commit until the user approves the proposed file list.
+
+Acceptance check:
+
+- Git is initialized in the correct directory.
+- Secret and generated files are ignored.
+- `git status` contains only intended source and documentation files.
+
+### Step 3 — Create and connect the public GitHub repository
+
+Progress record:
+
+```text
+Status: IN PROGRESS
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user explicitly approved Step 3, selected repository name beforebuild under BSJAIN92, accepted the proposed file list, and changed GitHub visibility to PUBLIC.
+Actions performed so far: Read the current execution plan and verified Steps 0–2 were COMPLETE; confirmed GitHub CLI authentication for BSJAIN92 using SSH; confirmed BSJAIN92/beforebuild did not already exist; repeated path-only and metadata-only secret checks with zero suspected real credentials; reviewed the intended untracked files; copied this plan into the application repository root without deleting the workspace backup; designated this repository copy authoritative; recorded the public-source disclosure risk.
+Commands run so far: Get-Content of the workspace plan; gh auth status; gh repo view BSJAIN92/beforebuild with safe metadata fields; git status --short --branch --untracked-files=all; Get-ChildItem filename scan; rg path-only credential pattern scan; metadata-only PowerShell secret classifier; Copy-Item of the plan into the repository root; Get-FileHash to verify the source and copied plan initially matched.
+Files changed so far: DEPLOYMENT_EXECUTION_PLAN.md added inside the application repository and updated as the authoritative progress file. The workspace-root DEPLOYMENT_EXECUTION_PLAN.md remains preserved as a backup.
+Verification evidence so far: GitHub reported the target repository does not exist. Authentication is active for BSJAIN92, Git operations use SSH, and the token has repository scope. The repeat classifier reported SuspectedRealCount=0. Only placeholder/comment examples and provider test data matched sensitive variable names. The copied plan's SHA-256 hash initially matched the workspace backup before repository-specific updates.
+Blocker or next action: No blocker. Create the approved initial commit, create the PUBLIC GitHub repository, push main, verify public visibility/default branch/root layout/history scan, then update this record to COMPLETE in a follow-up progress commit. Do not start Step 4.
+```
+
+Actions:
+
+1. Ask the user for the GitHub account or organization and repository name.
+2. Create the repository with the user-approved visibility (**public** for `BSJAIN92/beforebuild`).
+3. Add it as the Git remote.
+4. Create the initial commit and push `main` only after approval.
+5. Verify the GitHub file layout and repository visibility.
+
+Acceptance check:
+
+- GitHub repository exists with the user-approved visibility.
+- `main` is pushed.
+- The repository opens directly at `package.json`, `app`, `components`, `convex`, and `lib`.
+- No secret is present in the repository or its history.
+
+### Step 4 — Install dependencies and create the lockfile
+
+Actions:
+
+1. Use Node.js 22 for the supported deployment baseline.
+2. Run `npm install`.
+3. Review resolved dependency versions and `npm audit` output.
+4. Save and review `package-lock.json`.
+5. Do not make broad dependency upgrades without separate approval.
+
+Acceptance check:
+
+- Dependencies install successfully.
+- `package-lock.json` exists.
+- Audit findings are recorded with a proposed response.
+- A clean install can use `npm ci`.
+
+### Step 5 — Fix and run local automated checks
+
+Actions:
+
+1. Re-run `npm test` after local dependencies exist.
+2. If the Windows fallback still fails, update `scripts/test.mjs` to use the correct npm executable on Windows, or remove the global fallback if local TypeScript makes it unnecessary.
+3. Run:
+
+```sh
+npm test
+npm run demo:build
+npm run typecheck
+```
+
+4. Fix actual code or type errors one at a time, with approval before each materially separate fix.
+5. Commit the lockfile and approved fixes.
+
+Acceptance check:
+
+- Tests pass.
+- Demo build passes.
+- Type checking passes as far as possible before live Convex generation.
+- Results and any remaining expected Convex error are recorded.
+
+### Step 6 — Create and configure Convex development deployment
+
+Actions:
+
+1. Create or select a Convex project and development deployment.
+2. Run `npx convex dev`.
+3. Regenerate `convex/_generated` against the real project.
+4. Configure development Convex environment variables without exposing their values:
+
+```dotenv
+CLERK_JWT_ISSUER_DOMAIN=<development Clerk issuer>
+ADMIN_EMAILS=<verified owner email>
+BETA_ALLOWLIST=<development tester emails>
+OPENAI_API_KEY=<development key>
+AI_PROVIDER=openai
+AI_INTERVIEW_MODEL=<confirmed available model>
+AI_RESEARCH_MODEL=<confirmed available web-search model>
+AI_DEEP_RESEARCH_MODEL=<confirmed available deep-research model>
+AI_DEEP_SEARCH_TOOL=<confirmed supported tool>
+AI_MAX_DAILY_TURNS=20
+AI_MAX_DAILY_RESEARCH=1
+AI_MAX_IDEAS=10
+BILLING_ENABLED=false
+```
+
+If Clerk is not yet created, initialize Convex first, pause before the authenticated deployment, and continue after Step 7 supplies the issuer.
+
+Acceptance check:
+
+- Convex code generation succeeds.
+- Schema and functions deploy without errors.
+- Development limits are deliberately low.
+- No server secret is present in a public or `NEXT_PUBLIC_*` variable.
+
+### Step 7 — Configure Clerk development authentication
+
+Actions:
+
+1. Create a Clerk development application.
+2. Enable verified-email sign-in.
+3. Activate the Convex integration.
+4. Confirm token audience `convex`.
+5. Confirm tokens contain primary email and boolean `email_verified` claims.
+6. Configure local `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_DEMO_MODE=false
+NEXT_PUBLIC_CONVEX_URL=<development Convex URL>
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<development publishable key>
+CLERK_SECRET_KEY=<development secret key>
+```
+
+7. Add the Clerk issuer to Convex development and redeploy Convex auth configuration.
+
+Acceptance check:
+
+- Clerk can issue a Convex-compatible token.
+- `.env.local` is ignored by Git.
+- No key was committed or recorded in this file.
+
+### Step 8 — Verify the connected application locally
+
+Actions:
+
+1. Run `npm run build`.
+2. Run `npm run dev`.
+3. Test signed-out, admin, allowed tester, unlisted, and unverified states.
+4. Confirm an allowed user can create, save, reopen, rename, edit, export, and delete an idea.
+5. Record browser and terminal errors.
+
+Acceptance check:
+
+- Full production build passes.
+- Correct users are allowed or denied by the backend.
+- Core saved-idea operations work against Convex.
+
+### Step 9 — Run live access, ownership, resilience, and AI checks
+
+Actions:
+
+1. Use two genuine accounts to test cross-account isolation on every idea operation.
+2. Confirm a normal user cannot administer invites or pricing.
+3. Test allowlist revocation during an open session and active research.
+4. Complete a Basic idea and confirm it makes no web-research call.
+5. Run Intermediate and Advanced research and inspect real citations.
+6. Test refresh, cancel, retry, deletion during research, provider failure, rate limiting, malformed output, and spending-limit errors.
+7. Confirm private response IDs, keys, and raw provider payloads do not reach the browser.
+
+Acceptance check:
+
+- Ownership and admin boundaries hold.
+- All three product levels behave as designed.
+- Failures preserve saved work and show safe messages.
+- Test evidence is recorded without user idea content or secrets.
+
+### Step 10 — Create isolated production services
+
+Actions:
+
+1. Create a production Convex deployment.
+2. Create or activate a Clerk production instance.
+3. Create a separate production OpenAI project and key.
+4. Configure production Convex environment values separately from development.
+5. Add the verified owner email to `ADMIN_EMAILS`.
+6. Set low initial daily limits and provider-level spending controls.
+7. Keep `BILLING_ENABLED=false`.
+
+Acceptance check:
+
+- Development and production databases, credentials, and provider keys are separate.
+- Production settings contain no placeholder values.
+- Spending controls are active.
+
+### Step 11 — Configure custom domain and production Clerk
+
+Actions:
+
+1. Ask the user for the final domain and DNS destination.
+2. Configure the domain in Vercel and Clerk.
+3. Add required DNS records.
+4. Activate Clerk's production Convex integration.
+5. Set the production Clerk issuer in the production Convex deployment.
+6. Update production Clerk keys after any domain-generated key change.
+
+Acceptance check:
+
+- DNS and TLS certificate are valid.
+- Clerk production domain, keys, and Convex issuer match.
+- Authentication redirects return to the intended production domain.
+
+### Step 12 — Import GitHub repository into Vercel
+
+Actions:
+
+1. Import the private GitHub repository.
+2. Confirm the Vercel root directory is the repository root.
+3. Select Next.js and Node.js 22.
+4. Do not deploy with production secrets until the configuration has been reviewed.
+
+Acceptance check:
+
+- Vercel project is linked to the correct GitHub repository and production branch.
+- Root directory and runtime settings are correct.
+
+### Step 13 — Configure Vercel and Convex production deployment
+
+Actions:
+
+1. Set the Vercel build command:
+
+```sh
+npx convex deploy --cmd 'npm run build'
+```
+
+2. Generate a production Convex deploy key with only the required deployment permission.
+3. Configure production-only Vercel variables:
+
+```dotenv
+NEXT_PUBLIC_DEMO_MODE=false
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<production key>
+CLERK_SECRET_KEY=<production secret>
+CONVEX_DEPLOY_KEY=<production deploy key>
+```
+
+4. Set `NEXT_PUBLIC_CONVEX_URL` explicitly only if required, and verify it points to production.
+5. Never expose the production deploy key to preview branches.
+6. If previews are required, use a separate Convex preview deploy key and isolated preview credentials.
+
+Acceptance check:
+
+- Variables are assigned to the correct Vercel environments.
+- Production and preview deploy keys are not mixed.
+- Configuration review contains variable names and locations, not values.
+
+### Step 14 — Deploy and verify a hosted preview
+
+Actions:
+
+1. Create a deployment from a non-production branch using isolated preview services.
+2. Review build and Convex deployment logs.
+3. Run the hosted smoke checks from Steps 8 and 9.
+4. Fix each discovered issue through a separate approved step or sub-step.
+
+Acceptance check:
+
+- Hosted preview builds successfully.
+- Preview does not read or alter production data.
+- Authentication, storage, and required AI flows pass.
+
+### Step 15 — Deploy and verify production
+
+This step requires explicit approval that clearly names the production deployment.
+
+Actions:
+
+1. Record the exact Git commit selected for release.
+2. Merge or push it to the production branch.
+3. Verify Vercel and Convex deployments completed.
+4. Test the custom domain with admin, allowed tester, and denied user accounts.
+5. Complete a small Basic flow and one controlled research flow.
+6. Inspect service logs and provider usage.
+7. Record the prior Vercel deployment available for rollback.
+
+Acceptance check:
+
+- Production works on the custom domain.
+- Only verified, allowed accounts can access application data.
+- Frontend points only to production Convex.
+- No unexpected errors or cost spikes appear.
+
+### Step 16 — Configure monitoring, limits, rollback, and beta operations
+
+Actions:
+
+1. Configure billing and failure alerts in Vercel, Convex, Clerk, and OpenAI where available.
+2. Document tester revocation.
+3. Document secret rotation for every service.
+4. Document Vercel rollback and how backend schema compatibility will be checked before rollback.
+5. Establish a support contact and data-retention policy.
+6. Start with one admin and one tester before expanding access.
+
+Acceptance check:
+
+- A named owner receives alerts.
+- Rollback, revocation, and secret rotation instructions have been checked.
+- Spending limits remain active.
+- Billing remains disabled in the application.
+
+### Step 17 — Final handoff and release record
+
+Actions:
+
+1. Re-run the full verification suite from a clean clone where practical.
+2. Confirm the progress ledger is complete and accurate.
+3. Record the production URL, release commit, release tag, service owners, and verification date without recording secrets.
+4. Create a release tag such as `v0.1.0-beta.1` after user approval.
+5. Provide the user with remaining risks and recommended first-beta limits.
+
+Acceptance check:
+
+- Fresh installation uses `npm ci` successfully.
+- Tests, type checking, demo build, and Next.js build pass.
+- GitHub, Vercel, Convex, Clerk, and OpenAI integrations are verified.
+- Release and rollback references are recorded.
+- No required work is hidden behind a `COMPLETE` status.
+
+## Final definition of done
+
+Deployment is complete only when all of the following are true:
+
+- A fresh clone installs with `npm ci`.
+- Automated tests, type checking, demo build, and production build pass.
+- The public GitHub repository and its history contain no secrets.
+- Vercel deploys the selected commit from `main`.
+- Convex production functions deploy during the Vercel build.
+- Clerk production login works on the custom domain.
+- Backend allowlist, verification, admin, and ownership checks pass with real accounts.
+- Basic, Intermediate, and Advanced flows work with the intended AI behavior.
+- Monitoring, spending limits, rollback, revocation, and secret rotation are documented.
+- `BILLING_ENABLED=false` remains set.
+
+## Official references
+
+- Convex with Vercel: https://docs.convex.dev/production/hosting/vercel
+- Convex with Clerk: https://docs.convex.dev/auth/clerk
+- Vercel environments: https://vercel.com/docs/deployments/environments
+- Vercel environment variables: https://vercel.com/docs/environment-variables
+- GitHub repository quickstart: https://docs.github.com/en/repositories/creating-and-managing-repositories/quickstart-for-repositories
