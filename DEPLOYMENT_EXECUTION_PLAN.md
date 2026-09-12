@@ -102,7 +102,7 @@ Update this table immediately after every approved step.
 | 3 | Create and connect public GitHub repository | COMPLETE | 2026-09-12 | Public `BSJAIN92/beforebuild` exists; `main` is the default branch and tracks `origin/main`; expected root layout and history scan verified. Next action: request separate approval for Step 4. |
 | 4 | Install dependencies and create lockfile | COMPLETE | 2026-09-12 | `npm install` and a clean `npm ci` succeeded on Node.js v24.19.0; lockfile v3 created; audit found 0 vulnerabilities. Clerk post-install script remained blocked pending review. Next action: request separate approval for Step 5. |
 | 5 | Fix and run the local automated checks | COMPLETE | 2026-09-12 | All 29 tests, standalone demo build, full type check, and Next.js production build passed on Node.js v24.19.0. No product-code fix was needed. Next action: request separate approval and access for Step 6. |
-| 6 | Create and configure Convex development deployment | IN PROGRESS | 2026-09-12 | Cloud was approved and selected, then setup reached Convex's required data-region choice and was cancelled safely. No project or local config was created. Awaiting user choice: US East (N. Virginia) or Europe (Ireland). |
+| 6 | Create and configure Convex development deployment | IN PROGRESS | 2026-09-12 | Hosted project `beforebuild` was created in US East. Setup paused before linkage/sync at Convex's optional AI-guidance-files prompt. Awaiting user choice: add those files or skip them. |
 | 7 | Configure Clerk development authentication | NOT STARTED | — | Await Step 6 and user access. |
 | 8 | Verify the connected application locally | NOT STARTED | — | Await Step 7. |
 | 9 | Run live access, ownership, resilience, and AI checks | NOT STARTED | — | Await Step 8. |
@@ -384,6 +384,20 @@ Commands run: Get-Content DEPLOYMENT_EXECUTION_PLAN.md; npx convex dev --configu
 Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this resumed progress. No generated bindings, schema files, product code, package files, or secret-bearing files changed. No local Convex configuration was created, and project creation had not completed before cancellation.
 Verification evidence: After selecting cloud, Convex required "Where should this dev deployment run?" with choices "US East (N. Virginia)" and "Europe (Ireland)." The process was cancelled without choosing. .env.local and .convex remain absent; the only environment-named file is tracked .env.example. Codegen, schema/function sync, safe development settings, and deployment verification remain pending. @clerk/shared 3.47.8's postinstall remains blocked.
 Blocker or next action: One user decision is required: choose US East (N. Virginia) or Europe (Ireland). The choice controls where Convex stores/processes development data and affects latency. After approval, resume Step 6 and stop again rather than guessing if login, team selection, or another material choice appears. Do not begin Step 7.
+```
+
+Resume update after US East approval:
+
+```text
+Status: IN PROGRESS
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user selected US East (N. Virginia) for the cloud development deployment. No choice was given for Convex's later optional AI guidance files.
+Actions performed: Re-read the authoritative plan; resumed one-time new-project setup; selected the approved project name beforebuild, cloud deployment, and US East region; allowed Convex to create the hosted project; stopped safely when Convex asked whether to add AI guidelines, AGENTS.md, and agent skills; inspected local paths without printing environment values; reviewed the safe generated convex/tsconfig.json; added .convex/ to .gitignore as protection for any future local-only Convex metadata; confirmed Clerk's postinstall remains blocked.
+Commands run: Chunked Get-Content reads of DEPLOYMENT_EXECUTION_PLAN.md; npx convex dev --configure new --once in an interactive terminal; accepted beforebuild, cloud, and US East; sent Ctrl+C at the AI-files prompt; git status --short --branch; metadata-only Get-ChildItem checks; Test-Path for .env.local and .convex; Get-Content convex/tsconfig.json; git check-ignore for local Convex/environment paths; npm install-scripts ls.
+Files changed: Convex generated safe tracked config convex/tsconfig.json. .gitignore now ignores .convex/ local metadata in addition to .env.local through the existing .env* rule. DEPLOYMENT_EXECUTION_PLAN.md records progress. No generated API bindings changed yet; no environment or secret-bearing file was created.
+Verification evidence: Convex reported "Created project beforebuild" and provided the non-secret management URL https://dashboard.convex.dev/t/bhavya-jain-76d30/beforebuild. It then asked "Set up Convex AI files? (guidelines, AGENTS.md, agent skills)" and was cancelled without an answer. Git showed only untracked convex/tsconfig.json before this record. .env.local and .convex remained absent. Existing convex/_generated files retained their prior timestamps/sizes, so codegen and sync have not completed. @clerk/shared 3.47.8's postinstall remains blocked.
+Blocker or next action: One user choice is required: add Convex's optional AI guidance files or skip them. Recommended: skip them because deployment does not require them and this repository already has an authoritative execution plan; this avoids unrelated generated instructions. After approval, resume by linking to the existing hosted project rather than attempting to create it again, then run one-time codegen/sync and configure only the four approved safe limits. Do not begin Step 7.
 ```
 
 Actions:
