@@ -5,6 +5,7 @@ import { ConvexError, v } from "convex/values";
 import { BLOCKS, createIdea, makeMessage, uid, normalizeEmail, tierRank, TIERS, type Idea, type Tier, type CanvasItem } from "../lib/model";
 import { requireViewer } from "./access";
 import { charge, decode, encode, limit, owned, requireFreeBeta, requireIdle } from "./guards";
+import { founderInputError } from "../lib/input-policy";
 const tierValidator = v.union(v.literal("basic"), v.literal("intermediate"), v.literal("advanced"));
 const evidenceValidator = v.union(v.literal("founder"), v.literal("research"), v.literal("assumption"));
 const idArgs = { id: v.id("ideas") };
@@ -38,6 +39,7 @@ export const send = mutation({ args: { ...idArgs, text: v.string(), finish: v.op
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
   const text = args.text.trim(); if (!text && !args.finish) throw new ConvexError("Write an answer, or choose to create a draft now.");
   if (text.length > 4000) throw new ConvexError("Keep each answer under 4,000 characters.");
+  if (text) { const policyError = founderInputError(text); if (policyError) throw new ConvexError(policyError); }
   if (idea.messages.length >= 100) throw new ConvexError("This exploration has reached its conversation limit. Export it and start a new version.");
   if (text) { idea.messages.push(makeMessage("user", text)); idea.answerCount += 1; }
   await enqueue(ctx, row, idea, !!args.finish);
