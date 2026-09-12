@@ -19,8 +19,8 @@ export const claim = internalMutation({ args, handler: async (ctx, { id, token }
 } });
 export const reserveResearch = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return false;
-  await charge(ctx, row.owner, "research");
-  const idea = decode(row); idea.status = "researching"; idea.statusLabel = idea.tier === "advanced" ? "Investigating the opportunity in depth" : "Researching the market and alternatives";
+  const idea = decode(row); await charge(ctx, row.owner, idea.tier, "research");
+  idea.status = "researching"; idea.statusLabel = idea.tier === "advanced" ? "Investigating the opportunity in depth" : "Researching the market and alternatives";
   await ctx.db.patch(id, { document: encode(idea), runStage: "research-started" }); return true;
 } });
 export const waitForResearch = internalMutation({ args: { ...args, responseId: v.string(), kind: v.string() }, handler: async (ctx, { id, token, responseId, kind }) => {

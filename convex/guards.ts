@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { requireViewer } from "./access";
 import { isBusy, type Idea, type Tier } from "../lib/model";
+import { resolveUsageLimit, USAGE_LIMITS, type UsageKind } from "../lib/limits";
 export function decode(row: Doc<"ideas">): Idea { return JSON.parse(row.document) as Idea; }
 export function encode(idea: Idea): string { const json = JSON.stringify(idea); if (new TextEncoder().encode(json).byteLength > 420000) throw new ConvexError("This idea is too large. Export it and begin a new exploration."); return json; }
 export function limit(key: string, fallback: number, ceiling: number): number {
@@ -17,11 +18,16 @@ export function requireIdle(idea: Idea): void { if (isBusy(idea)) throw new Conv
 export function requireFreeBeta(tier: Tier): void {
   if (tier !== "basic" && process.env.BILLING_ENABLED === "true") throw new ConvexError("Paid access has not been integrated. Keep BILLING_ENABLED=false for this beta.");
 }
-export async function charge(ctx: MutationCtx, owner: string, kind: "turns" | "research") {
+export function usageLimit(tier: Tier, kind: UsageKind): number {
+  return resolveUsageLimit(tier, kind, process.env);
+}
+export async function charge(ctx: MutationCtx, owner: string, tier: Tier, kind: UsageKind) {
+  const config = USAGE_LIMITS[tier][kind];
+  if (!config) throw new ConvexError("Research is not available on the Basic level.");
   const day = new Date(Date.now()).toISOString().slice(0, 10);
   const usage = await ctx.db.query("usage").withIndex("by_owner_day", q => q.eq("owner", owner).eq("day", day)).unique();
-  const max = kind === "turns" ? limit("AI_MAX_DAILY_TURNS", 80, 500) : limit("AI_MAX_DAILY_RESEARCH", 3, 20);
-  if ((usage?.[kind] || 0) >= max) throw new ConvexError(kind === "turns" ? "You have reached the daily beta interview limit. Your work is saved; the limit resets at 00:00 UTC." : "You have reached the daily beta research limit. Your work is saved; the limit resets at 00:00 UTC.");
-  if (usage) await ctx.db.patch(usage._id, { [kind]: usage[kind] + 1 });
-  else await ctx.db.insert("usage", { owner, day, turns: kind === "turns" ? 1 : 0, research: kind === "research" ? 1 : 0 });
+  const max = usageLimit(tier, kind); const used = usage?.[config.field] || 0;
+  if (used >= max) throw new ConvexError(`You have reached the ${tier === "basic" ? "Basic" : tier === "intermediate" ? "Intermediate" : "Advanced"} daily ${kind === "turns" ? "AI message" : tier === "advanced" ? "deep-research" : "web-research"} limit. Your work is saved; the limit resets at 00:00 UTC.`);
+  if (usage) await ctx.db.patch(usage._id, { [config.field]: used + 1 });
+  else await ctx.db.insert("usage", { owner, day, [config.field]: 1 });
 }

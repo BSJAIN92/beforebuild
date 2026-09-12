@@ -10,7 +10,7 @@ const evidenceValidator = v.union(v.literal("founder"), v.literal("research"), v
 const idArgs = { id: v.id("ideas") };
 async function save(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea) { idea.updatedAt = Date.now(); await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt }); }
 async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, finish: boolean): Promise<void> {
-  await charge(ctx, row.owner, "turns");
+  await charge(ctx, row.owner, idea.tier, "turns");
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   idea.status = "thinking"; idea.statusLabel = "Thinking through your answer"; idea.error = ""; idea.updatedAt = Date.now();
   await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: finish, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });

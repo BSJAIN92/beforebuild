@@ -4,6 +4,7 @@ const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, cleanError, TIERS 
 const { demoTurn, createDemoBackend } = require('../.test-build/lib/demo.js');
 const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
 const { toMarkdown } = require('../.test-build/lib/export.js');
+const { resolveUsageLimit } = require('../.test-build/lib/limits.js');
 const { escapeHtml, richText } = require('../.test-build/lib/ui.js');
 const description = 'A small service helping freelance designers follow up on unpaid invoices.';
 function idea(tier = 'basic') { return createIdea(description, tier, tier !== 'basic'); }
@@ -92,6 +93,13 @@ test('research consent and input bounds are enforced in demo operations', async 
 test('configuration details are removed from tester-facing AI errors', () => {
   assert.equal(cleanError(new Error('The AI service is not configured. Ask the beta owner to set OPENAI_API_KEY on Convex.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
   assert.equal(cleanError(new Error('The AI service rejected its credentials or model permissions. Ask the beta owner to check the provider configuration.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
+});
+test('daily AI limits differ by level and remain configurable', () => {
+  assert.equal(resolveUsageLimit('basic', 'turns', {}), 10); assert.equal(resolveUsageLimit('basic', 'research', {}), 0);
+  assert.equal(resolveUsageLimit('intermediate', 'turns', {}), 15); assert.equal(resolveUsageLimit('intermediate', 'research', {}), 1);
+  assert.equal(resolveUsageLimit('advanced', 'turns', {}), 22); assert.equal(resolveUsageLimit('advanced', 'research', {}), 1);
+  const configured = { AI_BASIC_DAILY_TURNS: '14', AI_ADVANCED_DAILY_RESEARCH: '3' };
+  assert.equal(resolveUsageLimit('basic', 'turns', configured), 14); assert.equal(resolveUsageLimit('advanced', 'research', configured), 3);
 });
 test('cancel prevents a delayed demo response from overwriting the saved idea', async () => {
   const b = createDemoBackend(); const id = await b.create(description, 'basic', false); const pending = b.send(id, 'Freelancers');
