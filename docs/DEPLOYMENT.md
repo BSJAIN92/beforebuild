@@ -10,6 +10,7 @@ Use a separate development and production deployment. The standalone demo is not
 | `NEXT_PUBLIC_CONVEX_URL` | Yes / supplied by Convex build command | No | Correct deployment URL |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | No | Clerk instance, public by design |
 | `CLERK_SECRET_KEY` | Yes, secret | No | Server-side Clerk key |
+| `NEXT_PUBLIC_CLERK_PROXY_URL` | Production proxy only | No | Public same-origin Clerk proxy URL, such as `https://app.example/__clerk/` |
 | `CONVEX_DEPLOY_KEY` | Build secret | No | Vercel deploys the intended backend |
 | `CLERK_JWT_ISSUER_DOMAIN` | Not consumed here | Yes | Must match the Clerk instance |
 | `ADMIN_EMAILS` | No | Yes | Comma-separated verified owner emails |
@@ -36,7 +37,7 @@ Convex database pricing settings override the initial price environment values. 
 1. Install dependencies, inspect/audit resolved versions, and commit the generated lockfile. Do not use `npm ci` until a lockfile exists. Run `npx convex dev` against development to generate actual API bindings.
 2. Configure verified-email sign-in and the Convex integration in Clerk. Confirm the signed identity includes email and the true boolean email-verification claim. Missing verification must remain a denial, not be bypassed in application code.
 3. Set Convex development environment values. Run all domain tests, full typecheck and full Next.js build. Then complete the live two-account tests in `TESTING.md`.
-4. Configure production Clerk and the intended custom domain. Match production frontend keys and the production Convex issuer. Follow Clerk’s hosted-domain restrictions; do not assume production auth will work on any arbitrary temporary domain.
+4. Configure production Clerk and match its frontend keys to the production Convex issuer. Prefer an owned custom domain with Clerk's DNS setup. If an owned domain is unavailable, this app can use Clerk's advanced Frontend API proxy: deploy the `/__clerk` middleware route first, then have Clerk validate that resolving URL and set `NEXT_PUBLIC_CLERK_PROXY_URL` to the full HTTPS proxy URL ending in `/__clerk/`. Do not enable the proxy for a development Clerk instance.
 5. Set distinct production Convex environment values, including the owner email and provider key. Keep billing disabled. Set project-level AI spending controls and small daily research budgets.
 
 ## Vercel settings

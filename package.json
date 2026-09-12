@@ -1,13 +1,32 @@
 {
-  "name": "beforebuild", "version": "0.1.0", "private": true,
+  "name": "beforebuild",
+  "version": "0.1.0",
+  "private": true,
   "description": "Validation-first business model canvases for independent founders.",
   "scripts": {
-    "dev": "next dev", "build": "next build", "start": "next start",
-    "convex": "convex dev", "typecheck": "tsc --noEmit",
-    "test": "node scripts/test.mjs", "demo:build": "node scripts/build-demo.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "convex": "convex dev",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "demo:build": "node scripts/build-demo.mjs",
     "deploy:build": "convex deploy --cmd 'npm run build'"
   },
-  "dependencies": {"next": "^16.1.0", "react": "^19.2.0", "react-dom": "^19.2.0", "convex": "^1.31.0", "@clerk/nextjs": "^6.36.0"},
-  "devDependencies": {"typescript": "^5.9.0", "@types/node": "^22.0.0", "@types/react": "^19.2.0", "@types/react-dom": "^19.2.0"},
-  "engines": {"node": ">=22.0.0"}
+  "dependencies": {
+    "@clerk/nextjs": "^7.9.2",
+    "convex": "^1.31.0",
+    "next": "^16.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

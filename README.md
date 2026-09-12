@@ -114,6 +114,8 @@ NEXT_PUBLIC_DEMO_MODE=false
 NEXT_PUBLIC_CONVEX_URL=https://YOUR-DEPLOYMENT.convex.cloud
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=YOUR_CLERK_PUBLISHABLE_KEY
 CLERK_SECRET_KEY=YOUR_CLERK_SECRET_KEY
+# Production-only when using Clerk's advanced Frontend API proxy:
+NEXT_PUBLIC_CLERK_PROXY_URL=https://YOUR-PRODUCTION-DOMAIN/__clerk/
 ```
 
 Set the following **on the Convex deployment**, not only in Vercel or the local Next.js environment:
@@ -145,7 +147,7 @@ Sign in with the configured owner email. Open **Beta settings** to allow another
 
 ### 3. Deploy on Vercel
 
-Push the project to a private repository and import it into Vercel as a Next.js project. Configure Clerk for the intended hosted domain. For production Clerk, follow the custom-domain requirements rather than assuming a generic `vercel.app` domain is sufficient.
+Push the project to a repository and import it into Vercel as a Next.js project. Configure Clerk for the intended hosted domain. Prefer Clerk's normal DNS setup on a domain you own. A provider-owned domain such as `vercel.app` requires Clerk's advanced Frontend API proxy: deploy the built-in `/__clerk` proxy route, configure that resolving URL on the Clerk production domain, and set `NEXT_PUBLIC_CLERK_PROXY_URL` for the production build. Leave that variable unset in development.
 
 Set Vercel’s Clerk keys, `NEXT_PUBLIC_DEMO_MODE=false`, and `CONVEX_DEPLOY_KEY` for the intended production deployment. Ensure all AI/auth/admin settings are set on **Convex production**, separately from development. Use the build command:
 
