@@ -1,5 +1,6 @@
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, cleanError, TIERS } = require('../.test-build/lib/model.js');
 const { demoTurn, createDemoBackend } = require('../.test-build/lib/demo.js');
 const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
@@ -12,6 +13,10 @@ function idea(tier = 'basic') { return createIdea(description, tier, tier !== 'b
 function turn() { return { title: 'Nudge', reply: 'Let’s test the customer problem.', question: 'How do people handle this today?', questionHint: 'Describe a recent example.', suggestions: [], complete: false, summary: '', canvas: BLOCKS.map(b => ({ block: b.key, items: [{ id: b.key + '-1', text: 'A proposed step to test', evidence: 'assumption', sourceIds: [] }] })), challenges: [{ id: 'pain', title: 'Urgency is not confirmed', detail: 'Ask about real incidents.', test: 'Talk to five prospects.', severity: 'high', sourceIds: [] }], experiments: [{ id: 'talk', title: 'Have five conversations', hypothesis: 'The problem recurs.', steps: 'Ask about their last experience.', metric: '3 of 5 report an active workaround.', effort: 'Five conversations', priority: 'high' }] }; }
 function storage() { const map = new Map(); return { getItem: k => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: k => map.delete(k), clear: () => map.clear() }; }
 beforeEach(() => { global.localStorage = storage(); });
+test('Clerk authentication stays on the application domain', () => {
+  const provider = fs.readFileSync('components/Providers.tsx', 'utf8');
+  assert.match(provider, /<ClerkProvider\s+signInUrl="\/"\s+signUpUrl="\/"\s+afterSignOutUrl="\/">/);
+});
 for (const tier of ['basic', 'intermediate', 'advanced']) test(`${tier}: complete interview gives all nine blocks and a validation plan`, () => {
   let i = idea(tier);
   for (let n = 0; n < TIERS[tier].max; n++) i = demoTurn(i, `Founder response ${n + 1}`);
