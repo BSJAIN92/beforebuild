@@ -30,8 +30,8 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
   let destroyed = false; let sending = false; let toastTimer: ReturnType<typeof setTimeout> | undefined;
   const current = () => snapshot.ideas.find(i => i.id === selectedId);
   const button = (label: string, action: string, cls = "button secondary", attributes = "") => `<button class="${cls}" data-action="${action}" ${attributes}>${label}</button>`;
-  function notify(message: string) { toast = message; render(); clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast = ""; if (!destroyed) render(); }, 6000); }
-  async function attempt(fn: () => Promise<void>) { try { await fn(); } catch (error) { notify(cleanError(error)); } }
+  function notify(message: string, persistent = false) { toast = message; render(); clearTimeout(toastTimer); if (!persistent) toastTimer = setTimeout(() => { toast = ""; if (!destroyed) render(); }, 6000); }
+  async function attempt(fn: () => Promise<void>) { try { await fn(); } catch (error) { notify(cleanError(error), true); } }
   function nav() {
     const ideas = snapshot.ideas.slice(0, 5);
     return `<aside class="sidebar ${navOpen ? "is-open" : ""}" aria-label="Main navigation">
@@ -223,7 +223,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
       else if (action === "print" && i) printIdea(i);
       else if (action === "invite-toggle") await backend.invite(target.dataset.email!, target.dataset.active === "true");
       else if (action === "logout") await backend.logout();
-      else if (action === "dismiss-toast") { toast = ""; render(); }
+      else if (action === "dismiss-toast") { clearTimeout(toastTimer); toast = ""; render(); }
       else if (action === "demo-info") showDialog("A real interface. A clearly labeled demo.", '<p class="dialog-lead">This preview works without API keys. You can explore a scripted interview, edit the live canvas, change levels, save multiple ideas, make decisions, and export your work.</p><div class="notice warning">It does not call AI, perform live research, authenticate users, or enforce real invite access. Data is saved in this browser only.</div><p class="dialog-lead">The source also includes the connected Next.js + Convex application. Configure Clerk and an AI API key to run the private beta. Demo mode must be turned off before inviting real users.</p>');
     });
   }
