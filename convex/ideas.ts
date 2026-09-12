@@ -38,16 +38,17 @@ export const create = mutation({ args: { description: v.string(), tier: tierVali
 } });
 export const send = mutation({ args: { ...idArgs, text: v.string(), finish: v.optional(v.boolean()) }, handler: async (ctx, args) => {
   const { viewer, row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
+  if (process.env.AI_ENABLED !== "true") return { ok: false as const, error: "AI conversations are temporarily paused. Your work is saved. Please try again later." };
   const text = args.text.trim(); if (!text && !args.finish) throw new ConvexError("Write an answer, or choose to create a draft now.");
   if (text.length > 4000) throw new ConvexError("Keep each answer under 4,000 characters.");
   if (text) { const policyError = founderInputError(text); if (policyError) {
     await ctx.db.insert("rejectedInputs", { owner: row.owner, email: viewer.email, ideaId: row._id, tier: idea.tier, text, reason: policyError, source: "local", createdAt: Date.now() });
-    idea.messages.push(makeMessage("assistant", policyError)); await save(ctx, row, idea); return;
+    idea.messages.push(makeMessage("assistant", policyError)); await save(ctx, row, idea); return { ok: true as const };
   } }
   if (idea.messages.length >= 100) throw new ConvexError("This exploration has reached its conversation limit. Export it and start a new version.");
   let inputMessageId: string | undefined;
   if (text) { const message = makeMessage("user", text); inputMessageId = message.id; idea.messages.push(message); idea.answerCount += 1; }
-  await enqueue(ctx, row, idea, !!args.finish, inputMessageId);
+  await enqueue(ctx, row, idea, !!args.finish, inputMessageId); return { ok: true as const };
 } });
 export const retry = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);

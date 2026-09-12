@@ -77,7 +77,7 @@ export function safeUrl(value: string): string | null {
 export function normalizeEmail(email: string): string { return email.trim().toLowerCase(); }
 export function cleanError(error: unknown): string {
   if (error instanceof Error) {
-    const message = error.message.replace(/\[CONVEX[^\]]*\]\s*/g, "").replace(/Uncaught (ConvexError|Error):\s*/g, "");
+    const message = error.message.replace(/\[CONVEX[^\]]*\]\s*/g, "").replace(/^.*?Uncaught (ConvexError|Error):\s*/s, "").replace(/Request ID:\s*[a-zA-Z0-9_-]+/gi, "");
     if (/OPENAI_API_KEY|AI service is not configured|credentials or model permissions|provider configuration/i.test(message)) {
       return "The AI service is temporarily unavailable. Your work is saved. Please try again later.";
     }

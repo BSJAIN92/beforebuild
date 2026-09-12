@@ -94,6 +94,7 @@ test('research consent and input bounds are enforced in demo operations', async 
 test('configuration details are removed from tester-facing AI errors', () => {
   assert.equal(cleanError(new Error('The AI service is not configured. Ask the beta owner to set OPENAI_API_KEY on Convex.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
   assert.equal(cleanError(new Error('The AI service rejected its credentials or model permissions. Ask the beta owner to check the provider configuration.')), 'The AI service is temporarily unavailable. Your work is saved. Please try again later.');
+  assert.equal(cleanError(new Error('[CONVEX M(ideas:send)] [Request ID: abc123] Server Error Uncaught ConvexError: AI conversations are temporarily paused. Your work is saved. Please try again later.')), 'AI conversations are temporarily paused. Your work is saved. Please try again later.');
 });
 test('daily AI limits differ by level and remain configurable', () => {
   assert.equal(resolveUsageLimit('basic', 'turns', {}), 10); assert.equal(resolveUsageLimit('basic', 'research', {}), 0);
