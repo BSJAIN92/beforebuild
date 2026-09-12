@@ -135,7 +135,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
   function abusePanel() {
     if (!snapshot.viewer.admin || !snapshot.abuse) return ""; const a = snapshot.abuse;
     const usage = Object.entries(a.totals).map(([key, value]) => `<div><strong>${value}</strong><span>${e(key.replace(/([A-Z])/g, " $1").toLowerCase())}</span></div>`).join("");
-    const rejected = a.rejected.slice(0, 20).map(item => `<details class="rejection-row"><summary><span>${e(item.email)} · ${e(item.tier)} · ${e(item.source)}</span><time>${e(new Date(item.createdAt).toLocaleString())}</time></summary><p>${e(item.text)}</p><small>${e(item.reason)} · stored indefinitely</small></details>`).join("") || '<p class="empty-hint">No rejected input is stored.</p>';
+    const rejected = a.rejected.slice(0, 20).map(item => `<details class="rejection-row"><summary><span>${e(item.email)} · ${e(item.tier)} · ${e(item.source)}</span><time>${e(new Date(item.createdAt).toLocaleString())}</time></summary><p>${e(item.text)}</p><small>${e(item.reason)}</small></details>`).join("") || '<p class="empty-hint">No rejected input is stored.</p>';
     return `<section class="settings-card abuse-card"><div class="section-header"><div><h2>${icon("shield", 20)} AI usage and rejected input</h2><p>Today’s UTC totals and recent blocked messages. Only admins can access this data.</p></div>${pill("Stored indefinitely", "neutral")}</div><div class="usage-grid">${usage}</div><div class="notice warning">Rejected text may contain sensitive material. Use it only for abuse analysis.</div><div class="rejection-list">${rejected}</div></section>`;
   }
   function render() {
