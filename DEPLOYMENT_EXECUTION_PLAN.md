@@ -102,7 +102,7 @@ Update this table immediately after every approved step.
 | 3 | Create and connect public GitHub repository | COMPLETE | 2026-09-12 | Public `BSJAIN92/beforebuild` exists; `main` is the default branch and tracks `origin/main`; expected root layout and history scan verified. Next action: request separate approval for Step 4. |
 | 4 | Install dependencies and create lockfile | COMPLETE | 2026-09-12 | `npm install` and a clean `npm ci` succeeded on Node.js v24.19.0; lockfile v3 created; audit found 0 vulnerabilities. Clerk post-install script remained blocked pending review. Next action: request separate approval for Step 5. |
 | 5 | Fix and run the local automated checks | COMPLETE | 2026-09-12 | All 29 tests, standalone demo build, full type check, and Next.js production build passed on Node.js v24.19.0. No product-code fix was needed. Next action: request separate approval and access for Step 6. |
-| 6 | Create and configure Convex development deployment | IN PROGRESS | 2026-09-12 | Setup reached Convex's required cloud-versus-local deployment choice and was cancelled without selecting. No project or local config was created. Awaiting user approval to choose cloud (recommended for Vercel) or local beta. |
+| 6 | Create and configure Convex development deployment | IN PROGRESS | 2026-09-12 | Cloud was approved and selected, then setup reached Convex's required data-region choice and was cancelled safely. No project or local config was created. Awaiting user choice: US East (N. Virginia) or Europe (Ireland). |
 | 7 | Configure Clerk development authentication | NOT STARTED | — | Await Step 6 and user access. |
 | 8 | Verify the connected application locally | NOT STARTED | — | Await Step 7. |
 | 9 | Run live access, ownership, resilience, and AI checks | NOT STARTED | — | Await Step 8. |
@@ -370,6 +370,20 @@ Commands run: Get-Content DEPLOYMENT_EXECUTION_PLAN.md; git status --short --bra
 Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this progress. No Convex-generated bindings, product code, package files, environment files, or secret-bearing files changed. No external Convex project/deployment was created before cancellation.
 Verification evidence: Convex CLI offered project name beforebuild and then required choosing either "cloud deployment" or "local deployment (BETA)." The choice was not made. After cancellation, Git was clean, .env.local did not exist, .convex did not exist, and only the tracked .env.example matched the environment-file check. Code generation, schema sync, functions, deployment identity, and safe environment limits therefore remain pending. The Clerk postinstall script was not approved or run.
 Blocker or next action: One user decision is required: approve "cloud deployment" (recommended because the target is Vercel and a hosted Convex backend) or choose the local deployment beta. After that approval, resume Step 6, handle any login/team prompt without guessing, create/link beforebuild, perform one-time codegen/sync, and set only AI_MAX_DAILY_TURNS=20, AI_MAX_DAILY_RESEARCH=1, AI_MAX_IDEAS=10, and BILLING_ENABLED=false. Keep CLERK_JWT_ISSUER_DOMAIN, ADMIN_EMAILS, BETA_ALLOWLIST, OPENAI_API_KEY, provider/model settings, and Step 7 pending.
+```
+
+Resume update after cloud approval:
+
+```text
+Status: IN PROGRESS
+Updated: 2026-09-12
+Agent/session: /root/deployment_step_0
+Approval received: Yes — the user explicitly approved the cloud deployment choice for the existing Step 6. No data-region choice was approved.
+Actions performed: Re-read the authoritative plan; resumed the supported one-time new-project flow; accepted the already approved project name beforebuild; selected the newly approved cloud deployment option; stopped safely when Convex required a choice of data region; verified no local Convex deployment configuration or environment file was created; confirmed the Clerk postinstall script remains blocked.
+Commands run: Get-Content DEPLOYMENT_EXECUTION_PLAN.md; npx convex dev --configure new --once in an interactive terminal; accepted beforebuild; selected cloud deployment; sent Ctrl+C at the data-region prompt; git status --short --branch; Test-Path for .env.local and .convex; metadata-only Get-ChildItem check for .env*/.convex* paths; npm install-scripts ls.
+Files changed: DEPLOYMENT_EXECUTION_PLAN.md only, to save this resumed progress. No generated bindings, schema files, product code, package files, or secret-bearing files changed. No local Convex configuration was created, and project creation had not completed before cancellation.
+Verification evidence: After selecting cloud, Convex required "Where should this dev deployment run?" with choices "US East (N. Virginia)" and "Europe (Ireland)." The process was cancelled without choosing. .env.local and .convex remain absent; the only environment-named file is tracked .env.example. Codegen, schema/function sync, safe development settings, and deployment verification remain pending. @clerk/shared 3.47.8's postinstall remains blocked.
+Blocker or next action: One user decision is required: choose US East (N. Virginia) or Europe (Ireland). The choice controls where Convex stores/processes development data and affects latency. After approval, resume Step 6 and stop again rather than guessing if login, team selection, or another material choice appears. Do not begin Step 7.
 ```
 
 Actions:
