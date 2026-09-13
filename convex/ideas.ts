@@ -12,7 +12,7 @@ const idArgs = { id: v.id("ideas") };
 async function save(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea) { idea.updatedAt = Date.now(); await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt }); }
 async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, finish: boolean, inputMessageId?: string): Promise<void> {
   requireAIEnabled(); await throttle(ctx, row.owner);
-  await charge(ctx, row.owner, idea.tier, "turns");
+  await charge(ctx, row.owner, idea.tier, "turns", row._id);
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   idea.status = "thinking"; idea.statusLabel = "Thinking through your answer"; idea.error = ""; idea.updatedAt = Date.now();
   await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: finish, runMessageId: inputMessageId, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });
@@ -101,5 +101,6 @@ export const cancel = mutation({ args: idArgs, handler: async (ctx, args) => {
 export const remove = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row } = await owned(ctx, args.id);
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
+  for (const usage of await ctx.db.query("ideaUsage").withIndex("by_idea", q => q.eq("ideaId", row._id)).take(500)) await ctx.db.delete(usage._id);
   await ctx.db.delete(row._id);
 } });

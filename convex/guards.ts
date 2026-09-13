@@ -28,22 +28,34 @@ export async function throttle(ctx: MutationCtx, owner: string): Promise<void> {
   if (row) await ctx.db.patch(row._id, { messages: row.messages + 1 }); else await ctx.db.insert("bursts", { owner, minute, messages: 1 });
   for (const stale of await ctx.db.query("bursts").withIndex("by_minute", q => q.lt("minute", minute - 1)).take(50)) await ctx.db.delete(stale._id);
 }
-export async function refundTurn(ctx: MutationCtx, owner: string, tier: Tier): Promise<void> {
+export async function refundTurn(ctx: MutationCtx, owner: string, ideaId: Id<"ideas">, tier: Tier): Promise<void> {
   const day = new Date().toISOString().slice(0, 10); const config = USAGE_LIMITS[tier].turns;
-  const row = await ctx.db.query("usage").withIndex("by_owner_day", q => q.eq("owner", owner).eq("day", day)).unique();
-  if (row && config && (row[config.field] || 0) > 0) await ctx.db.patch(row._id, { [config.field]: (row[config.field] || 0) - 1 });
+  const turnField = config?.field as "basicTurns" | "intermediateTurns" | "advancedTurns" | undefined;
+  const row = await ctx.db.query("ideaUsage").withIndex("by_owner_idea_day", q => q.eq("owner", owner).eq("ideaId", ideaId).eq("day", day)).unique();
+  if (row && turnField && (row[turnField] || 0) > 0) await ctx.db.patch(row._id, { [turnField]: (row[turnField] || 0) - 1 });
 }
 export async function usageLimit(ctx: MutationCtx, tier: Tier, kind: UsageKind): Promise<number> {
   const overrides = await ctx.db.query("settings").withIndex("by_key", q => q.eq("key", "usageLimits")).unique();
   return resolveUsageLimit(tier, kind, process.env, overrides || {});
 }
-export async function charge(ctx: MutationCtx, owner: string, tier: Tier, kind: UsageKind) {
+export async function charge(ctx: MutationCtx, owner: string, tier: Tier, kind: UsageKind, ideaId?: Id<"ideas">) {
   const config = USAGE_LIMITS[tier][kind];
   if (!config) throw new ConvexError("Research is not available on the Basic level.");
   const day = new Date(Date.now()).toISOString().slice(0, 10);
+  if (kind === "turns") {
+    if (!ideaId) throw new Error("An idea is required for an AI message limit.");
+    const turnField = config.field as "basicTurns" | "intermediateTurns" | "advancedTurns";
+    const ideaUsage = await ctx.db.query("ideaUsage").withIndex("by_owner_idea_day", q => q.eq("owner", owner).eq("ideaId", ideaId).eq("day", day)).unique();
+    const used = (ideaUsage?.basicTurns || 0) + (ideaUsage?.intermediateTurns || 0) + (ideaUsage?.advancedTurns || 0);
+    const max = await usageLimit(ctx, tier, kind);
+    if (used >= max) throw new ConvexError(`This idea has reached its ${tier === "basic" ? "Basic" : tier === "intermediate" ? "Intermediate" : "Advanced"} daily AI message limit. Your work is saved; the limit resets at 00:00 UTC.`);
+    if (ideaUsage) await ctx.db.patch(ideaUsage._id, { [turnField]: (ideaUsage[turnField] || 0) + 1 });
+    else await ctx.db.insert("ideaUsage", { owner, ideaId, day, [turnField]: 1 });
+    return;
+  }
   const usage = await ctx.db.query("usage").withIndex("by_owner_day", q => q.eq("owner", owner).eq("day", day)).unique();
   const max = await usageLimit(ctx, tier, kind); const used = usage?.[config.field] || 0;
-  if (used >= max) throw new ConvexError(`You have reached the ${tier === "basic" ? "Basic" : tier === "intermediate" ? "Intermediate" : "Advanced"} daily ${kind === "turns" ? "AI message" : tier === "advanced" ? "deep-research" : "web-research"} limit. Your work is saved; the limit resets at 00:00 UTC.`);
+  if (used >= max) throw new ConvexError(`You have reached the ${tier === "intermediate" ? "Intermediate web-research" : "Advanced research"} daily limit. Your work is saved; the limit resets at 00:00 UTC.`);
   if (usage) await ctx.db.patch(usage._id, { [config.field]: used + 1 });
   else await ctx.db.insert("usage", { owner, day, [config.field]: 1 });
 }

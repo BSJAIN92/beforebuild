@@ -24,6 +24,10 @@ export default defineSchema({
     intermediateResearch: v.optional(v.number()), advancedResearch: v.optional(v.number()),
     turns: v.optional(v.number()), research: v.optional(v.number()) // Legacy shared counters; retained so existing development rows remain valid.
   }).index("by_owner_day", ["owner", "day"]),
+  ideaUsage: defineTable({
+    owner: v.string(), ideaId: v.id("ideas"), day: v.string(),
+    basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), advancedTurns: v.optional(v.number())
+  }).index("by_owner_idea_day", ["owner", "ideaId", "day"]).index("by_idea", ["ideaId"]).index("by_day", ["day"]),
   bursts: defineTable({ owner: v.string(), minute: v.number(), messages: v.number() }).index("by_owner_minute", ["owner", "minute"]).index("by_minute", ["minute"]),
   rejectedInputs: defineTable({ owner: v.string(), email: v.string(), ideaId: v.id("ideas"), tier: v.string(), text: v.string(), reason: v.string(), source: v.union(v.literal("local"), v.literal("moderation")), createdAt: v.number() })
     .index("by_created", ["createdAt"]).index("by_owner_created", ["owner", "createdAt"])

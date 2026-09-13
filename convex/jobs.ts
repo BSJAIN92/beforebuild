@@ -23,7 +23,7 @@ export const rejectModerated = internalMutation({ args: { ...args, messageId: v.
   const reason = "That message cannot be processed safely. Please answer the current business question without harmful or sensitive content.";
   await ctx.db.insert("rejectedInputs", { owner: row.owner, email: row.email, ideaId: row._id, tier: idea.tier, text: message.text, reason, source: "moderation", createdAt: Date.now() });
   idea.messages = idea.messages.filter(item => item.id !== messageId); idea.answerCount = Math.max(0, idea.answerCount - 1); idea.messages.push(makeMessage("assistant", reason)); idea.status = "draft"; idea.statusLabel = "Ready for a relevant answer";
-  await refundTurn(ctx, row.owner, idea.tier);
+  await refundTurn(ctx, row.owner, row._id, idea.tier);
   await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
 } });
 export const markModerated = internalMutation({ args: { ...args, messageId: v.string() }, handler: async (ctx, { id, token, messageId }) => {
@@ -69,4 +69,12 @@ export const watchdog = internalMutation({ args, handler: async (ctx, { id, toke
   const idea = decode(row); idea.status = "error"; idea.statusLabel = "The research paused"; idea.error = "This job exceeded the beta time limit. Your work is saved. Retry to continue.";
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
   await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
+} });
+
+export const cleanupOrphanIdeaUsage = internalMutation({ args: {}, handler: async ctx => {
+  let removed = 0;
+  for (const usage of await ctx.db.query("ideaUsage").take(200)) {
+    if (!await ctx.db.get(usage.ideaId)) { await ctx.db.delete(usage._id); removed += 1; }
+  }
+  return { removed };
 } });
