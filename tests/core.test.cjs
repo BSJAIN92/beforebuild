@@ -46,6 +46,10 @@ test('Support requires verified identity, bypasses waitlist, and protects admin 
   assert.match(schema, /by_owner_created/);
   assert.match(portal, /value=\{viewer\.email\} readOnly/);
   assert.ok(portal.indexOf('if (viewer.admin) return') < portal.indexOf('className="support-form"'), 'admins must return the request dashboard before the user form renders');
+  assert.match(portal, /statusFilter === "All" \|\| item\.status === statusFilter/);
+  assert.match(portal, /typeFilter === "All" \|\| item\.queryType === typeFilter/);
+  assert.match(portal, /\.slice\(\)\.sort\(\(a, b\) => sortOrder === "newest" \? b\.createdAt - a\.createdAt/);
+  assert.match(portal, /No requests match these filters\./);
   assert.match(portal, /<option>Support<\/option><option>Feature request<\/option><option>Other<\/option>/);
   assert.match(signIn, /forceRedirectUrl="\/support"/);
 });
