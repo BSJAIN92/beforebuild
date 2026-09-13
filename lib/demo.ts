@@ -92,14 +92,14 @@ export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
   return next;
 }
 export function createDemoBackend(): Backend {
-  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 }, invites: [], waitlist: [] };
+  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 }, invites: [], waitlist: [], support: [] };
   let persistenceError = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Snapshot;
       if (Array.isArray(parsed.ideas) && parsed.ideas.every(i => i && typeof i.id === "string" && typeof i.description === "string" && i.canvas && Array.isArray(i.messages))) {
-        data = { ...data, ideas: parsed.ideas, pricing: parsed.pricing || data.pricing, usageLimits: parsed.usageLimits || data.usageLimits, invites: parsed.invites || [], waitlist: parsed.waitlist || [] };
+        data = { ...data, ideas: parsed.ideas, pricing: parsed.pricing || data.pricing, usageLimits: parsed.usageLimits || data.usageLimits, invites: parsed.invites || [], waitlist: parsed.waitlist || [], support: parsed.support || [] };
         data.ideas = data.ideas.map(i => isBusy(i) ? { ...i, status: "draft", statusLabel: "Resumed from your last save" } : i);
       }
     }
@@ -143,6 +143,7 @@ export function createDemoBackend(): Backend {
     async retry(id) { update(id, i => ({ ...i, status: "draft", error: "" })); },
     async cancel(id) { tokens.delete(id); update(id, i => ({ ...i, status: "draft", statusLabel: "Paused — your work is saved" })); },
     async invite(email, active) { email = normalizeEmail(email); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address."); data.invites = [...data.invites.filter(i => i.email !== email), { email, active }]; emit(); },
+    async updateSupportStatus(id, status) { data.support = data.support.map(item => item.id === id ? { ...item, status, updatedAt: Date.now() } : item); emit(); },
     async savePricing(pricing: Pricing) { if (pricing.enabled) throw new Error("Checkout is not implemented. Billing must stay disabled."); data.pricing = { ...pricing, enabled: false }; emit(); },
     async saveUsageLimits(limits) { data.usageLimits = { ...limits }; emit(); },
     async logout() { /* Local demo has no authenticated session. */ },

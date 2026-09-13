@@ -16,6 +16,7 @@ import type * as jobs from "../jobs.js";
 import type * as providers from "../providers.js";
 import type * as runner from "../runner.js";
 import type * as settings from "../settings.js";
+import type * as support from "../support.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   providers: typeof providers;
   runner: typeof runner;
   settings: typeof settings;
+  support: typeof support;
 }>;
 
 /**

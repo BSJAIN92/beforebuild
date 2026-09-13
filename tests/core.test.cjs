@@ -32,6 +32,22 @@ test('Clerk authentication stays on the application domain', () => {
   assert.match(schema, /waitlist: defineTable/);
   assert.match(ui, /Waitlist<\/h2>/);
 });
+test('Support requires verified identity, bypasses waitlist, and protects admin operations', () => {
+  const support = fs.readFileSync('convex/support.ts', 'utf8');
+  const schema = fs.readFileSync('convex/schema.ts', 'utf8');
+  const portal = fs.readFileSync('components/SupportPortal.tsx', 'utf8');
+  const signIn = fs.readFileSync('app/support/sign-in/[[...sign-in]]/page.tsx', 'utf8');
+  assert.match(support, /identity\.emailVerified !== true/);
+  assert.doesNotMatch(support, /joinWaitlist/);
+  assert.match(support, /message\.length < 1 \|\| message\.length > 500/);
+  assert.match(support, /recent\.length >= 3/);
+  assert.match(support, /requireViewer\(ctx, true\)/);
+  assert.match(schema, /supportSubmissions: defineTable/);
+  assert.match(schema, /by_owner_created/);
+  assert.match(portal, /value=\{viewer\.email\} readOnly/);
+  assert.match(portal, /<option>Support<\/option><option>Feature request<\/option><option>Other<\/option>/);
+  assert.match(signIn, /forceRedirectUrl="\/support"/);
+});
 for (const tier of ['basic', 'intermediate', 'advanced']) test(`${tier}: complete interview gives all nine blocks and a validation plan`, () => {
   let i = idea(tier);
   for (let n = 0; n < TIERS[tier].max; n++) i = demoTurn(i, `Founder response ${n + 1}`);

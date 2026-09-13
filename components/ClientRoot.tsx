@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -16,7 +17,7 @@ function WaitlistDenied({ reason, email, signOut }: { reason: string; email: str
   const joinWaitlist = useMutation(api.access.joinWaitlist);
   const [status, setStatus] = useState<"adding" | "added" | "failed">("adding");
   useEffect(() => { let active = true; joinWaitlist({}).then(result => { if (active) setStatus(result.waiting ? "added" : "failed"); }).catch(() => { if (active) setStatus("failed"); }); return () => { active = false; }; }, [joinWaitlist]);
-  return <main className="auth-shell"><div className="auth-card"><Brand /><h1>A small, intentional beta.</h1><p>{reason}</p><p>{email}</p><div className={`notice ${status === "failed" ? "error" : ""}`}>{status === "adding" ? "Adding you to the waitlist…" : status === "added" ? "You’ve been added to the waitlist. The beta owner can now review your request." : "Access is still restricted, and we couldn’t add you to the waitlist. Please try signing in again."}</div><button className="button secondary" onClick={signOut}>Try another account</button></div></main>;
+  return <main className="auth-shell"><div className="auth-card"><Brand /><h1>A small, intentional beta.</h1><p>{reason}</p><p>{email}</p><div className={`notice ${status === "failed" ? "error" : ""}`}>{status === "adding" ? "Adding you to the waitlist…" : status === "added" ? "You’ve been added to the waitlist. The beta owner can now review your request." : "Access is still restricted, and we couldn’t add you to the waitlist. Please try signing in again."}</div><Link className="button primary" href="/support">Contact Support</Link><button className="button secondary" onClick={signOut}>Try another account</button></div></main>;
 }
 function Connected() {
   const { isLoaded, isSignedIn } = useAuth(); const { signOut } = useClerk();

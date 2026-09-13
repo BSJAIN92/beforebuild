@@ -46,6 +46,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
         ${ideas.length ? ideas.map(i => `<button class="idea-nav ${selectedId === i.id ? "active" : ""}" data-action="open" data-id="${e(i.id)}"><span class="idea-dot ${i.status === "ready" ? "ready" : ""}"></span><span>${e(i.title)}</span></button>`).join("") : '<p class="nav-empty">Room for your next big<br>small idea.</p>'}
       </div>
       <div class="sidebar-bottom"><div class="beta-note"><span class="beta-note-icon">${icon("spark", 18)}</span><strong>Small beta. Big possibilities.</strong><p>Every level is free while we<br>build this together.</p><span class="mini-label">PRIVATE BETA</span></div>
+      <a href="/support" class="nav-link settings-link">${icon("chat", 18)}Support</a>
       ${snapshot.viewer.admin ? button(icon("settings", 18) + "Beta settings", "settings", `nav-link settings-link ${view === "settings" ? "active" : ""}`) : ""}
       <div class="profile"><div class="avatar">${e(snapshot.viewer.name.charAt(0).toUpperCase() || "F")}</div><div><strong>${e(snapshot.viewer.name || "Founder")}</strong><span>${snapshot.viewer.demo ? "Demo workspace" : "Personal workspace"}</span></div>${!snapshot.viewer.demo ? button(icon("logout", 17), "logout", "icon-button", 'aria-label="Sign out"') : ""}</div></div>
     </aside>`;

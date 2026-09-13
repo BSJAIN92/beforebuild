@@ -2,10 +2,13 @@ import type { CanvasItem, BlockKey, ChallengeDecision, Idea, Tier } from "./mode
 export interface Viewer { email: string; name: string; admin: boolean; demo: boolean; }
 export interface Invite { email: string; active: boolean; }
 export interface WaitlistEntry { email: string; name: string; requestedAt: number; lastAttemptAt: number; attempts: number; }
+export type SupportQueryType = "Support" | "Feature request" | "Other";
+export type SupportStatus = "Not started" | "In progress" | "Completed";
+export interface SupportSubmission { id: string; email: string; name: string; queryType: SupportQueryType; message: string; status: SupportStatus; createdAt: number; updatedAt: number; }
 export interface Pricing { enabled: boolean; currency: string; intermediate: number; advanced: number; }
 export interface UsageLimits { basicTurns: number; intermediateTurns: number; intermediateResearch: number; advancedTurns: number; advancedResearch: number; }
 export interface AbuseDashboard { day: string; users: number; totals: { basicTurns: number; intermediateTurns: number; advancedTurns: number; intermediateResearch: number; advancedResearch: number; }; rejected: { id: string; email: string; ideaId: string; tier: string; text: string; reason: string; source: "local" | "moderation"; createdAt: number; }[]; }
-export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; usageLimits: UsageLimits; invites: Invite[]; waitlist: WaitlistEntry[]; abuse?: AbuseDashboard; }
+export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; usageLimits: UsageLimits; invites: Invite[]; waitlist: WaitlistEntry[]; support: SupportSubmission[]; abuse?: AbuseDashboard; }
 export interface Backend {
   snapshot(): Snapshot;
   subscribe(callback: () => void): () => void;
@@ -20,6 +23,7 @@ export interface Backend {
   retry(id: string): Promise<void>;
   cancel(id: string): Promise<void>;
   invite(email: string, active: boolean): Promise<void>;
+  updateSupportStatus(id: string, status: SupportStatus): Promise<void>;
   savePricing(pricing: Pricing): Promise<void>;
   saveUsageLimits(limits: UsageLimits): Promise<void>;
   logout(): Promise<void>;

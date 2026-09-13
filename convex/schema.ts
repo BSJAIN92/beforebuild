@@ -10,6 +10,10 @@ export default defineSchema({
     invites: defineTable({ email: v.string(), active: v.boolean(), updatedAt: v.number(), updatedBy: v.string() }).index("by_email", ["email"]),
   waitlist: defineTable({ owner: v.string(), email: v.string(), name: v.string(), requestedAt: v.number(), lastAttemptAt: v.number(), attempts: v.number() })
     .index("by_email", ["email"]).index("by_requested", ["requestedAt"]),
+  supportSubmissions: defineTable({
+    owner: v.string(), email: v.string(), name: v.string(), queryType: v.union(v.literal("Support"), v.literal("Feature request"), v.literal("Other")),
+    message: v.string(), status: v.union(v.literal("Not started"), v.literal("In progress"), v.literal("Completed")), createdAt: v.number(), updatedAt: v.number()
+  }).index("by_created", ["createdAt"]).index("by_owner_created", ["owner", "createdAt"]),
   settings: defineTable({
     key: v.string(), enabled: v.optional(v.boolean()), currency: v.optional(v.string()), intermediate: v.optional(v.number()), advanced: v.optional(v.number()),
     basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), intermediateResearch: v.optional(v.number()), advancedTurns: v.optional(v.number()), advancedResearch: v.optional(v.number())
