@@ -161,3 +161,11 @@ test('unavailable or corrupted browser storage does not crash the demo', () => {
   global.localStorage = { getItem() { throw new Error('blocked'); } }; const b = createDemoBackend(); assert.equal(b.snapshot().storageAvailable, false); assert.equal(b.snapshot().ideas.length, 0);
   global.localStorage = { getItem() { return '{invalid'; } }; assert.equal(createDemoBackend().snapshot().ideas.length, 0);
 });
+test('signed-out Support actions are spaced buttons', () => {
+  const source = fs.readFileSync(require.resolve('../components/SupportPortal.tsx'), 'utf8');
+  const styles = fs.readFileSync('app/globals.css', 'utf8');
+  assert.match(source, /className="auth-actions"/);
+  assert.match(source, /className="button secondary" href="\/sign-in">Return to beta sign in/);
+  assert.match(styles, /\.auth-actions\{[^}]*gap:12px/);
+  assert.match(styles, /\.nav-link\.settings-link\{text-decoration:none\}/);
+});
