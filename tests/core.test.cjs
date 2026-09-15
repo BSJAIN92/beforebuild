@@ -57,6 +57,17 @@ test('profiles use a private owned record and require a name for email-only sign
   assert.equal(backend.snapshot().viewer.name, 'New Name');
   await assert.rejects(() => backend.saveProfile('   '), /1 and 100/);
 });
+test('approved simple Terms are public and linked at the bottom center, not the sidebar', () => {
+  const terms = fs.readFileSync('app/terms/page.tsx', 'utf8');
+  const layout = fs.readFileSync('app/layout.tsx', 'utf8');
+  const ui = fs.readFileSync('lib/ui.ts', 'utf8');
+  const css = fs.readFileSync('app/globals.css', 'utf8');
+  for (const text of ['Terms and Conditions', '[LEGAL BUSINESS NAME — ADD AFTER REGISTRATION]', 'Google’s Gemini API', 'security and error records may be retained', 'Private beta', 'Liability']) assert.match(terms, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(layout, /className="global-terms-link" href="\/terms"/);
+  assert.match(css, /\.global-terms-link\{position:fixed;[^}]*left:50%;[^}]*bottom:7px;[^}]*translateX\(-50%\)/);
+  assert.doesNotMatch(ui, /data-action="terms"|settings-link[^\n]*Terms and Conditions/);
+  assert.doesNotMatch(terms, /governed by|exclusive jurisdiction|courts of/);
+});
 test('Support requires verified identity, bypasses waitlist, and protects admin operations', () => {
   const support = fs.readFileSync('convex/support.ts', 'utf8');
   const schema = fs.readFileSync('convex/schema.ts', 'utf8');
