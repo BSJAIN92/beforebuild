@@ -1,5 +1,5 @@
 import type { CanvasItem, BlockKey, ChallengeDecision, Idea, Tier } from "./model";
-export interface Viewer { email: string; name: string; admin: boolean; demo: boolean; }
+export interface Viewer { email: string; name: string; admin: boolean; demo: boolean; profileStored?: boolean; needsName?: boolean; }
 export interface Invite { email: string; active: boolean; }
 export interface WaitlistEntry { email: string; name: string; requestedAt: number; lastAttemptAt: number; attempts: number; }
 export type SupportQueryType = "Support" | "Feature request" | "Other";
@@ -26,6 +26,7 @@ export interface Backend {
   updateSupportStatus(id: string, status: SupportStatus): Promise<void>;
   savePricing(pricing: Pricing): Promise<void>;
   saveUsageLimits(limits: UsageLimits): Promise<void>;
+  saveProfile(displayName: string): Promise<void>;
   logout(): Promise<void>;
   seedExample?(): Promise<string>;
 }

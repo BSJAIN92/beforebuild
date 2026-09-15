@@ -14,6 +14,7 @@ import type * as gemini from "../gemini.js";
 import type * as guards from "../guards.js";
 import type * as ideas from "../ideas.js";
 import type * as jobs from "../jobs.js";
+import type * as profiles from "../profiles.js";
 import type * as providerContext from "../providerContext.js";
 import type * as providers from "../providers.js";
 import type * as runner from "../runner.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   guards: typeof guards;
   ideas: typeof ideas;
   jobs: typeof jobs;
+  profiles: typeof profiles;
   providerContext: typeof providerContext;
   providers: typeof providers;
   runner: typeof runner;

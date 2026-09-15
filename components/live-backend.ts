@@ -24,6 +24,7 @@ export function createLiveBackend(client: ConvexReactClient, viewer: Viewer, sig
     async updateSupportStatus(id, status: SupportStatus) { await client.mutation(api.support.setStatus, { id: id as Id<"supportSubmissions">, status }); },
     async savePricing(pricing) { await client.mutation(api.settings.savePricing, pricing); },
     async saveUsageLimits(limits) { await client.mutation(api.settings.saveUsageLimits, limits); },
+    async saveProfile(displayName) { await client.mutation(api.profiles.save, { displayName }); },
     logout: signOut
   };
 }

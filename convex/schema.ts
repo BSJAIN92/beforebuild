@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 export default defineSchema({
+  profiles: defineTable({ owner: v.string(), displayName: v.string(), updatedAt: v.number() }).index("by_owner", ["owner"]),
   ideas: defineTable({
     owner: v.string(), email: v.string(), title: v.string(), updatedAt: v.number(), document: v.string(),
     runToken: v.optional(v.string()), runStage: v.optional(v.string()), runStartedAt: v.optional(v.number()),

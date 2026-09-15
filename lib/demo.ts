@@ -1,5 +1,6 @@
 import { createIdea, emptyCanvas, isBusy, makeMessage, normalizeEmail, reopenForRequiredAnswers, tierRank, TIERS, uid, type BlockKey, type CanvasItem, type ChallengeDecision, type Idea, type Tier } from "./model";
 import type { Backend, Pricing, Snapshot } from "./backend";
+import { validateDisplayName } from "./profile";
 const STORAGE_KEY = "beforebuild.demo.v1";
 const questions = [
   ["What happens today when this person encounters the problem?", "Think about their last real experience: what did they do, and what went wrong?", "value"],
@@ -139,6 +140,7 @@ export function createDemoBackend(): Backend {
     async updateSupportStatus(id, status) { data.support = data.support.map(item => item.id === id ? { ...item, status, updatedAt: Date.now() } : item); emit(); },
     async savePricing(pricing: Pricing) { if (pricing.enabled) throw new Error("Checkout is not implemented. Billing must stay disabled."); data.pricing = { ...pricing, enabled: false }; emit(); },
     async saveUsageLimits(limits) { data.usageLimits = { ...limits }; emit(); },
+    async saveProfile(displayName) { data.viewer = { ...data.viewer, name: validateDisplayName(displayName), profileStored: true, needsName: false }; emit(); },
     async logout() { /* Local demo has no authenticated session. */ },
     async seedExample() { const existing = data.ideas.find(i => i.title === "Nudge"); if (existing) return existing.id; const idea = seedIdea(); data.ideas.unshift(idea); emit(); return idea.id; }
   };

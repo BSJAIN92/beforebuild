@@ -1,6 +1,7 @@
 import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { normalizeEmail } from "../lib/model";
+import { suggestedDisplayName } from "../lib/profile";
 export function envEmails(key: string): Set<string> { return new Set((process.env[key] || "").split(",").map(normalizeEmail).filter(Boolean)); }
 export async function emailAllowed(ctx: QueryCtx | MutationCtx, email: string): Promise<boolean> {
   if (envEmails("ADMIN_EMAILS").has(email)) return true;
@@ -16,7 +17,8 @@ export async function requireViewer(ctx: QueryCtx | MutationCtx, admin = false) 
   const isAdmin = envEmails("ADMIN_EMAILS").has(email);
   if (!(await emailAllowed(ctx, email))) throw new ConvexError("This email is not on the private beta allowlist.");
   if (admin && !isAdmin) throw new ConvexError("Administrator access is required.");
-  return { owner: identity.tokenIdentifier, email, name: identity.givenName || identity.name || "Founder", admin: isAdmin, demo: false };
+  const profile = await ctx.db.query("profiles").withIndex("by_owner", q => q.eq("owner", identity.tokenIdentifier)).unique();
+  return { owner: identity.tokenIdentifier, email, name: profile?.displayName || suggestedDisplayName(identity.givenName, identity.name) || "Founder", admin: isAdmin, demo: false };
 }
 export const me = query({ args: {}, handler: async ctx => {
   const identity = await ctx.auth.getUserIdentity();
@@ -24,7 +26,9 @@ export const me = query({ args: {}, handler: async ctx => {
   const email = normalizeEmail(identity.email || "");
   const verified = identity.emailVerified === true;
   const allowed = verified && await emailAllowed(ctx, email);
-  return { allowed, reason: !verified ? "Please verify your email. The authentication token must include email_verified=true." : allowed ? "" : "This email is not on the beta allowlist. Ask the beta owner to add it.", viewer: { email, name: identity.givenName || identity.name || "Founder", admin: envEmails("ADMIN_EMAILS").has(email), demo: false } };
+  const profile = allowed ? await ctx.db.query("profiles").withIndex("by_owner", q => q.eq("owner", identity.tokenIdentifier)).unique() : null;
+  const suggestedName = suggestedDisplayName(identity.givenName, identity.name);
+  return { allowed, reason: !verified ? "Please verify your email. The authentication token must include email_verified=true." : allowed ? "" : "This email is not on the beta allowlist. Ask the beta owner to add it.", viewer: { email, name: profile?.displayName || suggestedName || "", admin: envEmails("ADMIN_EMAILS").has(email), demo: false, profileStored: !!profile, needsName: allowed && !profile && !suggestedName } };
 } });
 export const joinWaitlist = mutation({ args: {}, handler: async ctx => {
   const identity = await ctx.auth.getUserIdentity();

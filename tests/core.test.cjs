@@ -8,6 +8,7 @@ const { toMarkdown } = require('../.test-build/lib/export.js');
 const { resolveUsageLimit, resolveGeminiDailyLimit, geminiQuotaDay } = require('../.test-build/lib/limits.js');
 const { founderInputError } = require('../.test-build/lib/input-policy.js');
 const { redactDiagnosticContent } = require('../.test-build/lib/diagnostics.js');
+const { validateDisplayName, suggestedDisplayName } = require('../.test-build/lib/profile.js');
 const { escapeHtml, richText } = require('../.test-build/lib/ui.js');
 const description = 'A small service helping freelance designers follow up on unpaid invoices.';
 function idea(tier = 'basic') { return createIdea(description, tier, tier !== 'basic'); }
@@ -32,6 +33,29 @@ test('Clerk authentication stays on the application domain', () => {
   assert.match(access, /export const listWaitlist = query/);
   assert.match(schema, /waitlist: defineTable/);
   assert.match(ui, /Waitlist<\/h2>/);
+});
+test('profiles use a private owned record and require a name for email-only sign-in', async () => {
+  assert.equal(validateDisplayName('  Bhavya Jain  '), 'Bhavya Jain');
+  assert.equal(suggestedDisplayName(undefined, 'Login Name'), 'Login Name');
+  assert.equal(suggestedDisplayName(undefined, undefined), '');
+  assert.throws(() => validateDisplayName('   '), /1 and 100/);
+  assert.throws(() => validateDisplayName('a'.repeat(101)), /1 and 100/);
+  assert.throws(() => validateDisplayName('Bad\nName'), /control characters/);
+  const schema = fs.readFileSync('convex/schema.ts', 'utf8');
+  const profiles = fs.readFileSync('convex/profiles.ts', 'utf8');
+  const access = fs.readFileSync('convex/access.ts', 'utf8');
+  const root = fs.readFileSync('components/ClientRoot.tsx', 'utf8');
+  assert.match(schema, /profiles: defineTable/);
+  assert.match(profiles, /requireViewer\(ctx\)/);
+  assert.match(profiles, /withIndex\("by_owner"/);
+  assert.match(access, /profileStored: !!profile/);
+  assert.match(access, /needsName: allowed && !profile && !suggestedName/);
+  assert.match(root, /What should we call you\?/);
+  assert.match(root, /access\.viewer\.needsName/);
+  const backend = createDemoBackend();
+  await backend.saveProfile('  New Name  ');
+  assert.equal(backend.snapshot().viewer.name, 'New Name');
+  await assert.rejects(() => backend.saveProfile('   '), /1 and 100/);
 });
 test('Support requires verified identity, bypasses waitlist, and protects admin operations', () => {
   const support = fs.readFileSync('convex/support.ts', 'utf8');

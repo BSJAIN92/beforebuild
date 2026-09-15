@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 const require = createRequire(import.meta.url);
 let ts; try { ts = require("typescript"); } catch { ts = require(path.join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "typescript")); }
 const root = path.resolve(import.meta.dirname, "..");
-const names = ["model", "backend", "icons", "export", "demo", "ui"];
+const names = ["model", "backend", "icons", "export", "profile", "demo", "ui"];
 const modules = names.map(name => {
   const source = fs.readFileSync(path.join(root, "lib", name + ".ts"), "utf8");
   const output = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, strict: true } }).outputText;

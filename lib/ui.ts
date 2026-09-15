@@ -48,7 +48,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
       <div class="sidebar-bottom"><div class="beta-note"><span class="beta-note-icon">${icon("spark", 18)}</span><strong>Small beta. Big possibilities.</strong><p>Every level is free while we<br>build this together.</p><span class="mini-label">PRIVATE BETA</span></div>
       <a href="/support" class="nav-link settings-link">${icon("chat", 18)}Support</a>
       ${snapshot.viewer.admin ? button(icon("settings", 18) + "Beta settings", "settings", `nav-link settings-link ${view === "settings" ? "active" : ""}`) : ""}
-      <div class="profile"><div class="avatar">${e(snapshot.viewer.name.charAt(0).toUpperCase() || "F")}</div><div><strong>${e(snapshot.viewer.name || "Founder")}</strong><span>${snapshot.viewer.demo ? "Demo workspace" : "Personal workspace"}</span></div>${!snapshot.viewer.demo ? button(icon("logout", 17), "logout", "icon-button", 'aria-label="Sign out"') : ""}</div></div>
+      <div class="profile"><div class="avatar">${e(snapshot.viewer.name.charAt(0).toUpperCase() || "F")}</div><button class="profile-details" data-action="profile" aria-label="Edit your name"><strong>${e(snapshot.viewer.name || "Founder")}</strong><span>${snapshot.viewer.demo ? "Demo workspace" : "Personal workspace"}</span></button>${!snapshot.viewer.demo ? button(icon("logout", 17), "logout", "icon-button", 'aria-label="Sign out"') : ""}</div></div>
     </aside>`;
   }
   function header() {
@@ -224,6 +224,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
       else if (action === "retry" && i) await backend.retry(i.id);
       else if (action === "cancel" && i) await backend.cancel(i.id);
       else if (action === "rename" && i) showDialog("Give this idea a name.", `<form id="rename-form"><label class="field-label" for="idea-name">Idea name</label><input id="idea-name" value="${e(i.title)}" maxlength="100" required><div class="dialog-footer"><button class="button primary" type="submit">Save name</button></div></form>`);
+      else if (action === "profile") showDialog("Edit your name", `<p class="dialog-lead">This is the name shown in your private BeforeBuild workspace.</p><form id="profile-form"><label class="field-label" for="profile-name">Your name</label><input id="profile-name" value="${e(snapshot.viewer.name)}" minlength="1" maxlength="100" autocomplete="name" required><div class="dialog-footer"><button class="button primary" type="submit">Save name</button></div></form>`);
       else if (action === "delete") { const id = target.dataset.id!; const idea = snapshot.ideas.find(i => i.id === id); if (idea) showDialog("Delete this idea?", `<p class="dialog-lead">“${e(idea.title)}” and its saved conversation will be deleted. Export a copy first if you need one.</p><div class="dialog-footer">${button("Keep idea", "close-dialog", "button secondary")}${button("Delete idea", "confirm-delete", "button danger", `data-id="${e(id)}"`)}</div>`); }
       else if (action === "confirm-delete") { await backend.remove(target.dataset.id!); notify("Idea deleted."); }
       else if (action === "export" && i) showDialog("Take your thinking with you.", `<p class="dialog-lead">Export the canvas, assumptions, validation plan, and conversation.</p><div class="export-options">${button(icon("book", 22) + '<span><strong>Markdown</strong><small>Readable in Notion, Obsidian, and text editors</small></span>' + icon("download", 18), "export-md", "export-option")}${button(icon("copy", 22) + '<span><strong>JSON</strong><small>A portable structured copy of your idea</small></span>' + icon("download", 18), "export-json", "export-option")}${button(icon("print", 22) + '<span><strong>Print-friendly report</strong><small>Print or save a PDF using your browser</small></span>' + icon("external", 18), "print", "export-option")}</div>`);
@@ -259,6 +260,7 @@ export function mountWorkspace(root: HTMLElement, backend: Backend): () => void 
         }).filter(item => item.text);
         await backend.editBlock(i.id, block, items); notify("Section saved. Your edits stay yours.");
       } else if (form.id === "rename-form" && i) { await backend.rename(i.id, (form.querySelector("input") as HTMLInputElement).value); }
+      else if (form.id === "profile-form") { await backend.saveProfile((form.querySelector("input") as HTMLInputElement).value); notify("Your name is saved."); }
       else if (form.id === "upgrade-form" && i) { await backend.upgrade(i.id, selectedTier, false); notify(`Now exploring at ${TIERS[selectedTier].label} level. Your previous work is kept.`); }
       else if (form.id === "invite-form") { const email = (form.querySelector("input") as HTMLInputElement).value; await backend.invite(email, true); notify(snapshot.viewer.demo ? "Added to the demo allowlist. No email was sent." : "Access allowed. Share your beta URL with this person; no email was sent."); }
       else if (form.id === "pricing-form") {
