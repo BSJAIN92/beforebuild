@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.2",
+    "@google/genai": "^2.22.0",
     "convex": "^1.31.0",
     "next": "^16.1.0",
     "react": "^19.2.0",

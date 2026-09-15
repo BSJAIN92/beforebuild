@@ -4,21 +4,21 @@ const { provider, researchReport } = require('../.test-build/convex/providers.js
 const { createIdea } = require('../.test-build/lib/model.js');
 const originalFetch = global.fetch;
 let requests;
+async function requestDetails(input, options) {
+  if (input instanceof Request) return { url: input.url, headers: Object.fromEntries(input.headers), body: JSON.parse(await input.clone().text()) };
+  return { url: String(input), headers: Object.fromEntries(new Headers(options?.headers)), body: options?.body ? JSON.parse(options.body) : undefined };
+}
 beforeEach(() => {
-  requests = []; process.env.OPENAI_API_KEY = 'not-a-real-test-key';
-  for (const k of ['AI_PROVIDER','OPENAI_BASE_URL','AI_INTERVIEW_MODEL','AI_RESEARCH_MODEL','AI_DEEP_RESEARCH_MODEL','AI_DEEP_SEARCH_TOOL']) delete process.env[k];
+  requests = []; process.env.OPENAI_API_KEY = 'not-a-real-test-key'; process.env.GEMINI_API_KEY = 'not-a-real-gemini-key';
+  for (const k of ['AI_PROVIDER','OPENAI_BASE_URL','AI_INTERVIEW_MODEL','AI_RESEARCH_MODEL','AI_DEEP_RESEARCH_MODEL','AI_DEEP_SEARCH_TOOL','GEMINI_MODEL']) delete process.env[k];
   global.fetch = async (url, options) => { requests.push({ url, ...options, body: options.body ? JSON.parse(options.body) : undefined }); return Response.json({ id: 'resp_mock', status: 'queued' }); };
 });
-after(() => { global.fetch = originalFetch; delete process.env.OPENAI_API_KEY; });
-function idea(tier) { return createIdea('A service helping freelance designers follow up on unpaid invoices.', tier, tier !== 'basic'); }
+after(() => { global.fetch = originalFetch; delete process.env.OPENAI_API_KEY; delete process.env.GEMINI_API_KEY; });
+function idea(tier) { const value = createIdea('A service helping freelance designers follow up on unpaid invoices.', tier, false); value.researchConsent = tier !== 'basic'; return value; }
 test('Basic cannot run native web research', async () => { await assert.rejects(() => provider().startResearch(idea('basic')), /not permitted/); assert.equal(requests.length, 0); });
-test('Moderation uses the text-only safety endpoint', async () => {
-  global.fetch = async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return Response.json({ results: [{ flagged: true }] }); };
-  assert.equal(await provider().moderate('unsafe test input'), true); assert.equal(requests[0].url, 'https://api.openai.com/v1/moderations'); assert.equal(requests[0].body.model, 'omni-moderation-latest'); assert.equal(requests[0].body.input, 'unsafe test input');
-});
 test('Zero-credit or rate-limit responses expose no provider body or secret', async () => {
   global.fetch = async () => new Response('billing account detail / private request / not-a-real-test-key', { status: 429 });
-  await assert.rejects(() => provider().moderate('A valid business answer'), error => /rate or spending limit/.test(error.message) && !/billing account detail|private request|not-a-real-test-key/.test(error.message));
+  await assert.rejects(() => provider().interview(idea('basic'), false), error => /rate or spending limit/.test(error.message) && !/billing account detail|private request|not-a-real-test-key/.test(error.message));
 });
 test('Intermediate uses provider-native web search in background mode', async () => {
   await provider().startResearch(idea('intermediate')); const r = requests[0];
@@ -58,4 +58,83 @@ test('Source-free research fails closed rather than masquerading as evidence', (
 });
 test('Provider response IDs cannot escape the expected API path', async () => {
   assert.throws(() => provider().retrieve('../unexpected'), /invalid response identifier/); assert.equal(requests.length, 0);
+});
+
+test('Gemini interview uses JSON mode, strict local instructions, and no Basic search tool', async () => {
+  process.env.AI_PROVIDER = 'gemini';
+  const turn = { title: 'Test', reply: 'Thanks.', question: 'What are people using today?', questionHint: 'Think about their workaround.', suggestions: [], complete: false, summary: '', canvas: [], challenges: [], experiments: [] };
+  global.fetch = async (input, options) => { requests.push(await requestDetails(input, options)); return Response.json({ id: 'int_test', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify(turn) }] }] }); };
+  const result = await provider().interview(idea('basic'), false); const request = requests[0];
+  assert.equal(result.question, turn.question); assert.match(request.url, /\/interactions$/); assert.equal(request.body.model, 'gemini-3.8-flash');
+  assert.ok(!JSON.stringify(request.body.response_format.schema).includes('maxItems'));
+  assert.ok(!JSON.stringify(request.body.response_format.schema).includes('maxLength'));
+  assert.equal(request.body.response_format.type, 'text'); assert.equal(request.body.response_format.mime_type, 'application/json');
+  assert.ok(request.body.system_instruction.includes('The complete nested JSON schema is:'));
+  assert.equal(request.body.store, false); assert.equal(request.body.tools, undefined); assert.equal(request.body.safety_settings, undefined);
+  assert.equal(request.headers['x-goog-api-key'], 'not-a-real-gemini-key'); assert.ok(!JSON.stringify(request.body).includes('not-a-real-gemini-key'));
+});
+
+test('Gemini Basic cannot start research and makes no request', async () => {
+  process.env.AI_PROVIDER = 'gemini'; await assert.rejects(() => provider().startResearch(idea('basic')), /not permitted/); assert.equal(requests.length, 0);
+});
+
+test('Gemini research uses Google Search grounding and converts supported citations', async () => {
+  process.env.AI_PROVIDER = 'gemini';
+  global.fetch = async (input, options) => { requests.push(await requestDetails(input, options)); return Response.json({ id: 'int_research', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'Competitors charge monthly.', annotations: [{ type: 'url_citation', url: 'https://example.com/pricing', title: 'Pricing', start_index: 0, end_index: 11 }] }] }] }); };
+  const response = await provider().startResearch(idea('intermediate')); const request = requests[0].body;
+  assert.deepEqual(request.tools, [{ type: 'google_search' }]); assert.equal(request.store, false); assert.equal(response.status, 'completed');
+  const report = researchReport(response, 'intermediate'); assert.equal(report.sources.length, 1); assert.equal(report.sources[0].url, 'https://example.com/pricing');
+});
+
+test('Gemini source-free research is rejected before it can be saved', async () => {
+  process.env.AI_PROVIDER = 'gemini'; global.fetch = async () => Response.json({ id: 'int_no_sources', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'Unsupported research.' }] }] });
+  const response = await provider().startResearch(idea('advanced')); assert.throws(() => researchReport(response, 'advanced'), /no verifiable source/);
+});
+
+test('Gemini rejected configuration and malformed output fail safely', async () => {
+  process.env.AI_PROVIDER = 'gemini';
+  global.fetch = async () => Response.json({ error: { status: 'INVALID_ARGUMENT', message: 'Request rejected by safety settings.' } }, { status: 400 });
+  await assert.rejects(() => provider().interview(idea('basic'), false), /rejected the configured model or tool/);
+  global.fetch = async () => Response.json({ id: 'int_bad_json', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: '{bad json' }] }] });
+  await assert.rejects(() => provider().interview(idea('basic'), false));
+});
+
+test('Gemini quota and credential errors expose no raw body or key', async () => {
+  process.env.AI_PROVIDER = 'gemini'; let calls = 0;
+  global.fetch = async () => { calls += 1; return new Response('private prompt / not-a-real-gemini-key', { status: 429 }); };
+  await assert.rejects(() => provider().interview(idea('basic'), false), error => /rate or spending limit/.test(error.message) && !/private prompt|not-a-real-gemini-key/.test(error.message));
+  assert.equal(calls, 1); calls = 0;
+  global.fetch = async () => { calls += 1; return new Response('not-a-real-gemini-key', { status: 403 }); };
+  await assert.rejects(() => provider().interview(idea('basic'), false), error => /credentials/.test(error.message) && !error.message.includes('not-a-real-gemini-key'));
+  assert.equal(calls, 1);
+});
+
+test('Gemini diagnostics retain provider detail and email but redact API keys from public logs and stored records', async () => {
+  process.env.AI_PROVIDER = 'gemini';
+  const originalError = console.error; const logged = [];
+  console.error = (...args) => logged.push(args);
+  global.fetch = async () => Response.json({ error: { status: 'INVALID_ARGUMENT', message: 'Invalid generation_config for bsjcloud@gmail.com using not-a-real-gemini-key' } }, { status: 400 });
+  let diagnostic;
+  try { await assert.rejects(() => provider().interview(idea('basic'), false), error => { diagnostic = error.diagnostic; return /rejected the configured model or tool/.test(error.message); }); }
+  finally { console.error = originalError; }
+  assert.equal(logged.length, 1);
+  assert.deepEqual(logged[0], ['Gemini request rejected', { provider: 'gemini', httpStatus: 400, providerStatus: 'INVALID_ARGUMENT', category: 'generation-config', message: 'Stored in the admin-only provider error table.' }]);
+  const output = JSON.stringify(logged);
+  assert.ok(!output.includes('not-a-real-gemini-key')); assert.ok(!output.includes('bsjcloud@gmail.com')); assert.ok(!output.includes('generation_config'));
+  assert.equal(diagnostic.message, 'Invalid generation_config for bsjcloud@gmail.com using [REDACTED_API_KEY]');
+});
+
+test('Gemini timeout identity survives for the worker safe-timeout mapping', async () => {
+  process.env.AI_PROVIDER = 'gemini'; global.fetch = async () => { throw new DOMException('private timeout details', 'TimeoutError'); };
+  await assert.rejects(() => provider().interview(idea('basic'), false), error => error.name === 'TimeoutError');
+});
+
+test('Gemini cancellation is cooperative and makes no extra provider request', async () => {
+  process.env.AI_PROVIDER = 'gemini'; const ai = provider(); await ai.cancel('local-reference'); await ai.remove('local-reference'); assert.equal(requests.length, 0);
+  await assert.rejects(() => ai.retrieve('local-reference'), /does not use background retrieval/);
+});
+
+test('Provider selection fails closed and OpenAI remains available for rollback', async () => {
+  process.env.AI_PROVIDER = 'unknown-provider'; assert.throws(() => provider(), /not supported/);
+  process.env.AI_PROVIDER = 'openai'; await provider().startResearch(idea('intermediate')); assert.equal(requests[0].url, 'https://api.openai.com/v1/responses');
 });

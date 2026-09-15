@@ -29,10 +29,9 @@ export const create = mutation({ args: { description: v.string(), tier: tierVali
   if (description.length < 20 || description.length > 5000) throw new ConvexError("Describe your idea in 20–5,000 characters.");
   requireFreeBeta(args.tier);
   if (!args.aiConsent) throw new ConvexError("Please agree to AI processing before starting.");
-  if (args.tier !== "basic" && !args.researchConsent) throw new ConvexError("This level needs your consent to AI-led web research.");
   const max = limit("AI_MAX_IDEAS", 30, 30);
   if ((await ctx.db.query("ideas").withIndex("by_owner", q => q.eq("owner", viewer.owner)).take(max)).length >= max) throw new ConvexError(`The beta limit is ${max} saved ideas. Export and remove an old idea to add another.`);
-  const idea = createIdea(description, args.tier, args.researchConsent, undefined, args.aiConsent);
+  const idea = createIdea(description, args.tier, false, undefined, args.aiConsent);
   const id = await ctx.db.insert("ideas", { owner: viewer.owner, email: viewer.email, title: idea.title, updatedAt: idea.updatedAt, document: encode(idea) });
   idea.id = id; await ctx.db.patch(id, { document: encode(idea) }); return id;
 } });
@@ -58,8 +57,7 @@ export const retry = mutation({ args: idArgs, handler: async (ctx, args) => {
 export const upgrade = mutation({ args: { ...idArgs, tier: tierValidator, consent: v.boolean() }, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(args.tier);
   if (tierRank(args.tier) <= tierRank(idea.tier)) throw new ConvexError("Choose a deeper level. Your current work will be preserved.");
-  if (!args.consent) throw new ConvexError("Please allow AI-led web research for this level.");
-  idea.tier = args.tier; idea.researchConsent = true;
+  idea.tier = args.tier; idea.researchConsent = false; idea.reports = [];
   idea.messages.push(makeMessage("system", `Founder upgraded to ${TIERS[args.tier].label}. Keep previous answers, edits, completed experiments, and decisions. Ask new, deeper questions rather than repeating earlier ones.`));
   await enqueue(ctx, row, idea, false);
 } });

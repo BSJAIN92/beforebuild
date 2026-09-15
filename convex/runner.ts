@@ -2,9 +2,10 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { provider, researchReport, type ProviderResponse } from "./providers";
+import { provider } from "./providers";
 import { cleanError, type Idea } from "../lib/model";
 import { requireAIEnabled } from "./guards";
+import { ProviderRequestError } from "./gemini";
 interface WorkState { idea: Idea; stage: string; responseId?: string; finish: boolean; polls: number; researchKind?: string; inputMessageId?: string; }
 export const work = internalAction({ args: { id: v.id("ideas"), token: v.string() }, handler: async (ctx, args): Promise<void> => {
   let responseToClean: string | undefined;
@@ -13,39 +14,12 @@ export const work = internalAction({ args: { id: v.id("ideas"), token: v.string(
     if (!state) return;
     requireAIEnabled();
     const ai = provider(); const idea = state.idea;
-    if (state.inputMessageId) {
-      const input = idea.messages.find(message => message.id === state.inputMessageId && message.role === "user");
-      if (input && await ai.moderate(input.text)) { await ctx.runMutation(internal.jobs.rejectModerated, { ...args, messageId: state.inputMessageId }); return; }
-      await ctx.runMutation(internal.jobs.markModerated, { ...args, messageId: state.inputMessageId });
-    }
-    const kind = idea.tier === "advanced" ? "advanced" : "intermediate";
-    const needsResearch = idea.tier !== "basic" && idea.researchConsent && (idea.answerCount >= 2 || state.finish) && !idea.reports.some(r => r.kind === idea.tier && !r.demo);
-    let research: ProviderResponse | undefined;
-    if (state.stage === "poll") {
-      if (!state.responseId) throw new Error("The research job lost its provider reference. Retry to restart the job.");
-      if (state.polls >= 120) throw new Error("Research reached the beta time limit. Your work is saved; please retry.");
-      research = await ai.retrieve(state.responseId); responseToClean = state.responseId;
-    } else if (state.stage === "start" && needsResearch) {
-      const reserved = await ctx.runMutation(internal.jobs.reserveResearch, args);
-      if (!reserved) return;
-      research = await ai.startResearch(idea); responseToClean = research.id;
-    } else if (state.stage === "research-started") {
-      throw new Error("Research was interrupted before its reference could be saved. Please retry. Check provider usage before repeatedly retrying.");
-    }
-    if (research) {
-      if (["queued", "in_progress"].includes(research.status)) {
-        const active = await ctx.runMutation(internal.jobs.waitForResearch, { ...args, responseId: research.id, kind });
-        if (!active) { await ai.cancel(research.id).catch(() => {}); await ai.remove(research.id).catch(() => {}); }
-        responseToClean = undefined; return;
-      }
-      if (research.status !== "completed") throw new Error(`AI research ${research.status === "incomplete" ? "was incomplete" : "did not complete"}. Your answers are saved; please retry.`);
-      const report = researchReport(research, kind);
-      await ctx.runMutation(internal.jobs.storeResearch, { ...args, reportJson: JSON.stringify(report) });
-      await ai.remove(research.id).catch(() => {}); responseToClean = undefined; return;
-    }
+    // Research provider methods remain available for a future product review, but the active product is interview-only.
+    if (!await ctx.runMutation(internal.jobs.reserveGeminiRequest, args)) return;
     const turn = await ai.interview(idea, state.finish);
     await ctx.runMutation(internal.jobs.complete, { ...args, turnJson: JSON.stringify(turn) });
   } catch (error) {
+    if (error instanceof ProviderRequestError) await ctx.runMutation(internal.jobs.recordProviderError, { ...args, ...error.diagnostic, operation: "interview-or-research" });
     const internalMessage = error instanceof Error ? error.message.split("\n")[0].slice(0, 350) : "Unknown AI worker failure";
     console.error("AI worker failed", { name: error instanceof Error ? error.name : "UnknownError", message: internalMessage });
     const message = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError") ? "The AI service timed out. Your answer is saved. Retry to continue; the previous provider request may still incur usage." : cleanError(error);

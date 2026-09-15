@@ -5,7 +5,18 @@ import { emailAllowed } from "./access";
 import { charge, decode, encode, refundTurn } from "./guards";
 import { applyTurn, type Turn } from "../lib/ai-contract";
 import { makeMessage, type ResearchReport } from "../lib/model";
+import { geminiQuotaDay, resolveGeminiDailyLimit } from "../lib/limits";
 const args = { id: v.id("ideas"), token: v.string() };
+export const reserveGeminiRequest = internalMutation({ args, handler: async (ctx, { id, token }) => {
+  const idea = await ctx.db.get(id); if (!idea || idea.runToken !== token) return false;
+  if (process.env.AI_PROVIDER !== "gemini") return true;
+  const day = geminiQuotaDay(); const max = resolveGeminiDailyLimit(process.env);
+  const usage = await ctx.db.query("providerUsage").withIndex("by_provider_day", q => q.eq("provider", "gemini").eq("day", day)).unique();
+  if ((usage?.requests || 0) >= max) throw new Error("Gemini's daily beta capacity for this environment is used up. Your work is saved; try again after the daily reset.");
+  if (usage) await ctx.db.patch(usage._id, { requests: usage.requests + 1 });
+  else await ctx.db.insert("providerUsage", { provider: "gemini", day, requests: 1 });
+  return true;
+} });
 export const claim = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id);
   if (!row || row.runToken !== token || (row.leaseUntil || 0) > Date.now()) return null;
@@ -63,6 +74,16 @@ export const fail = internalMutation({ args: { ...args, error: v.string() }, han
   const idea = decode(row); idea.status = "error"; idea.statusLabel = "Your answer is saved"; idea.error = error.slice(0, 350);
   if (row.responseId) await ctx.scheduler.runAfter(0, internal.runner.cancelResponse, { responseId: row.responseId });
   await ctx.db.patch(id, { document: encode(idea), runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });
+} });
+export const recordProviderError = internalMutation({ args: {
+  ...args, provider: v.string(), operation: v.string(), httpStatus: v.number(), providerStatus: v.string(), category: v.string(), message: v.string()
+}, handler: async (ctx, { id, token, provider, operation, httpStatus, providerStatus, category, message }) => {
+  const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;
+  const idea = decode(row);
+  await ctx.db.insert("providerErrors", {
+    owner: row.owner, email: row.email, ideaId: row._id, tier: idea.tier, provider: provider.slice(0, 40), operation: operation.slice(0, 40),
+    httpStatus, providerStatus: providerStatus.slice(0, 80), category: category.slice(0, 80), message: message.slice(0, 2000), createdAt: Date.now()
+  });
 } });
 export const watchdog = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;

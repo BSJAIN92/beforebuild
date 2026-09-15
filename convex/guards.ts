@@ -4,7 +4,17 @@ import type { Id, Doc } from "./_generated/dataModel";
 import { requireViewer } from "./access";
 import { isBusy, type Idea, type Tier } from "../lib/model";
 import { resolveUsageLimit, USAGE_LIMITS, type UsageKind } from "../lib/limits";
-export function decode(row: Doc<"ideas">): Idea { return JSON.parse(row.document) as Idea; }
+export function decode(row: Doc<"ideas">): Idea {
+  const idea = JSON.parse(row.document) as Idea;
+  idea.reports = [];
+  idea.researchConsent = false;
+  for (const items of Object.values(idea.canvas)) for (const item of items) {
+    if (item.evidence === "research") item.evidence = "assumption";
+    item.sourceIds = [];
+  }
+  for (const challenge of idea.challenges) challenge.sourceIds = [];
+  return idea;
+}
 export function encode(idea: Idea): string { const json = JSON.stringify(idea); if (new TextEncoder().encode(json).byteLength > 420000) throw new ConvexError("This idea is too large. Export it and begin a new exploration."); return json; }
 export function limit(key: string, fallback: number, ceiling: number): number {
   const value = Number(process.env[key] || fallback); return Number.isSafeInteger(value) && value > 0 ? Math.min(value, ceiling) : fallback;

@@ -40,9 +40,9 @@ export interface Idea {
 }
 export interface TierConfig { label: string; min: number; max: number; description: string; research: string; }
 export const TIERS: Record<Tier, TierConfig> = {
-  basic: { label: "Basic", min: 3, max: 5, description: "Find your starting point.", research: "Your answers. No web research." },
-  intermediate: { label: "Intermediate", min: 6, max: 10, description: "Put your idea in context.", research: "AI-led market and competitor research." },
-  advanced: { label: "Advanced", min: 12, max: 18, description: "Pressure-test the opportunity.", research: "Deep research and sharper challenges." }
+  basic: { label: "Basic", min: 3, max: 5, description: "Build a clear foundation.", research: "Customer, problem, workaround, and first test." },
+  intermediate: { label: "Intermediate", min: 6, max: 10, description: "Examine the business model.", research: "Alternatives, acquisition, payment, delivery, and risk." },
+  advanced: { label: "Advanced", min: 12, max: 18, description: "Pressure-test the opportunity.", research: "Switching, economics, retention, distribution, constraints, and counterevidence." }
 };
 export function emptyCanvas(): Canvas {
   return Object.fromEntries(BLOCKS.map(b => [b.key, []])) as unknown as Canvas;
@@ -52,11 +52,11 @@ export function uid(): string {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 export function makeMessage(role: Message["role"], text: string): Message { return { id: uid(), role, text, createdAt: Date.now() }; }
-export function createIdea(description: string, tier: Tier, researchConsent: boolean, id = uid(), aiConsent = true): Idea {
+export function createIdea(description: string, tier: Tier, _researchConsent: boolean, id = uid(), aiConsent = true): Idea {
   const now = Date.now();
   const title = description.trim().split(/\s+/).slice(0, 7).join(" ");
   const question = "Who is the very first kind of person you would help, and what frustrating task are they trying to get done?";
-  return { id, title, description: description.trim(), tier, aiConsent, researchConsent, createdAt: now, updatedAt: now,
+  return { id, title, description: description.trim(), tier, aiConsent, researchConsent: false, createdAt: now, updatedAt: now,
     status: "draft", statusLabel: "Let’s find the problem worth solving", canvas: emptyCanvas(),
     messages: [makeMessage("user", description.trim()), makeMessage("assistant", "Let’s start with the person, not the product. We’ll shape the business together, one question at a time.\n\n" + question)],
     challenges: [], experiments: [], reports: [], answerCount: 0, question,
@@ -68,8 +68,7 @@ export function evidenceCount(idea: Idea, type: Evidence): number { return Objec
 export function isBusy(idea: Idea): boolean { return idea.status === "thinking" || idea.status === "researching"; }
 export function tierRank(tier: Tier): number { return ["basic", "intermediate", "advanced"].indexOf(tier); }
 export function needsResearch(idea: Idea): boolean {
-  return idea.tier !== "basic" && idea.researchConsent && idea.answerCount >= 2 &&
-    !idea.reports.some(r => r.kind === idea.tier && !r.demo);
+  return false;
 }
 export function safeUrl(value: string): string | null {
   try { const u = new URL(value); return ["https:", "http:"].includes(u.protocol) && !u.username && !u.password ? u.href : null; } catch { return null; }

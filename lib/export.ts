@@ -1,13 +1,11 @@
 import { BLOCKS, TIERS, type Idea } from "./model";
 export function toMarkdown(idea: Idea): string {
-  const sources = idea.reports.flatMap(r => r.sources);
   const lines = [`# ${idea.title}`, "", `Level: ${TIERS[idea.tier].label} | Updated: ${new Date(idea.updatedAt).toISOString()}`, "",
-    "> This is a business model draft, not proof of demand. Founder input is self-reported; research is source-backed; assumptions still need testing.", "", "## Original idea", idea.description, "", "## Summary", idea.summary || "Still taking shape.", "", "## Business model canvas"];
+    "> This is a business model draft, not proof of demand. Founder input is self-reported; assumptions still need testing.", "", "## Original idea", idea.description, "", "## Summary", idea.summary || "Still taking shape.", "", "## Business model canvas"];
   for (const b of BLOCKS) {
     lines.push("", `### ${b.label}`);
     for (const i of idea.canvas[b.key]) {
-      lines.push(`- [${i.evidence === "founder" ? "Founder input" : i.evidence === "research" ? "Research" : "Assumption"}] ${i.text}`);
-      for (const id of i.sourceIds) { const s = sources.find(s => s.id === id); if (s) lines.push(`  Source: ${s.title} — ${s.url}`); }
+      lines.push(`- [${i.evidence === "founder" ? "Founder input" : "Assumption"}] ${i.text}`);
     }
     if (!idea.canvas[b.key].length) lines.push("Not yet explored.");
   }
@@ -15,9 +13,6 @@ export function toMarkdown(idea: Idea): string {
   for (const c of idea.challenges) lines.push("", `### ${c.title}`, `Priority: ${c.severity} | Founder decision: ${c.decision}`, c.detail, `Suggested test: ${c.test}`);
   lines.push("", "## Validation plan");
   for (const e of idea.experiments) lines.push("", `### ${e.done ? "[x]" : "[ ]"} ${e.title}`, `Priority: ${e.priority} | Effort: ${e.effort}`, `Hypothesis: ${e.hypothesis}`, `Action: ${e.steps}`, `Decision threshold: ${e.metric}`);
-  lines.push("", "## Research");
-  if (!idea.reports.length) lines.push(idea.tier === "basic" ? "Basic does not include web research." : "Research has not been completed.");
-  for (const r of idea.reports) lines.push("", `### ${r.demo ? "Illustrative demo — not live research" : "AI-led research"} (${new Date(r.createdAt).toISOString()})`, r.text, ...r.sources.map(s => `- ${s.title}: ${s.url}`));
   lines.push("", "## Interview");
   for (const m of idea.messages) lines.push("", `**${m.role === "user" ? "Founder" : m.role === "assistant" ? "BeforeBuild" : "Note"}:** ${m.text}`);
   return lines.join("\n");

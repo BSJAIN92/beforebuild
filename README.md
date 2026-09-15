@@ -2,7 +2,7 @@
 
 **Get clear before you start building.** A validation-first workspace for solo founders and small teams exploring micro-SaaS and other small-business ideas.
 
-The app turns a raw idea into a plain-language conversation and a live, editable nine-section Business Model Canvas. Every completed exploration also includes constructive challenges, explicit assumptions and prioritized validation experiments. Research-backed levels add cited research before deeper questions. The founder always chooses whether to accept, revise or disagree.
+The app turns a raw idea into a plain-language, interview-only conversation and a live, editable nine-section Business Model Canvas. Every completed exploration also includes constructive challenges, explicit assumptions and prioritized validation experiments. The founder always chooses whether to accept, revise or disagree.
 
 ## Start here
 
@@ -20,26 +20,24 @@ The app turns a raw idea into a plain-language conversation and a live, editable
 
 ## The three levels
 
-| Level | Interview target | Research | Beta access |
+| Level | Interview target | Interview focus | Beta access |
 | --- | --- | --- | --- |
-| Basic | 3–5 answers | None; only founder input and clearly labeled proposals | Free |
-| Intermediate | 6–10 total answers | Focused AI-led research on problems, alternatives, pricing approaches and customer channels | Free for invited testers |
-| Advanced | 12–18 total answers | Deeper AI-led investigation of competition, switching friction, distribution, economics, retention and counterevidence | Free for invited testers |
+| Basic | 3–5 answers | Customer, problem, workaround, desired result and first test | Free |
+| Intermediate | 6–10 total answers | Alternatives, acquisition, payment, delivery and fastest-failing assumptions | Free for invited testers |
+| Advanced | 12–18 total answers | Switching, buying decisions, economics, retention, distribution, constraints and counterevidence | Free for invited testers |
 
-These are question budgets, not time estimates. The connected coach may finish within the range when context is sufficient. The scripted demo uses the maximum. Users may explicitly request an early draft, with unanswered areas labeled assumptions. Intermediate and Advanced still research before an early final draft.
-
-Research normally starts after the first two answers establish context. The next question is generated using the completed report. An upgrade preserves the same idea record, answers, manual edits, previous research, founder decisions and completed experiments. Advanced adds a deeper report even if Intermediate research already exists. Each research depth is run once per idea; a major pivot should start a new idea, or you can extend the source with explicit research refresh/versioning.
+These are question budgets, not time estimates. The connected coach may finish within the range when context is sufficient. The scripted demo uses the maximum. Users may explicitly request an early draft, with unanswered areas labeled assumptions. Upgrades preserve the same idea record, answers, manual edits, founder decisions and completed experiments.
 
 Every finished canvas has all nine sections: customer segments, value proposition, channels, customer relationships, revenue streams, key resources, key activities, key partners and cost structure. Completing a canvas does not mean a business has been validated.
 
 ## Included product behavior
 
 - Conversational interview, one focused question per turn, optional examples and an “I’m not sure yet” path. The canvas updates after each completed turn. Desktop is side-by-side; mobile switches between conversation and canvas.
-- Direct editing and renaming; manually edited sections are locked against later AI replacement. The user can edit them again. Evidence labels distinguish founder statements, source-backed research and untested assumptions. A founder statement is not independently verified evidence.
+- Direct editing and renaming; manually edited sections are locked against later AI replacement. Evidence labels distinguish founder statements from untested assumptions. A founder statement is not independently verified evidence.
 - Assumptions with a suggested test and recorded founder decisions; validation experiments include hypotheses, steps, measurable decision thresholds, effort and completion tracking.
 - Multiple private saved ideas, a searchable library, deletion, Markdown and structured JSON exports, and a browser print view. “Save as PDF” uses the browser’s print dialog. There is no server-side PDF service or JSON import feature.
 - Verified-email allowlist, administrative allowlist management, configurable prices and disabled billing. Adding an email grants access but does **not** send an invitation email.
-- Saved background research state, polling, retries, cancellation, stale-result protection, daily usage budgets and per-idea size limits.
+- Retries, cancellation, stale-result protection, daily usage budgets and per-idea size limits.
 
 ## Architecture
 
@@ -50,10 +48,7 @@ Next.js / React on Vercel
     └── authenticated Convex queries and mutations
             ├── owner-scoped ideas, settings, allowlist and usage ledger
             ├── scheduled Node actions for AI calls
-            └── provider adapter: Responses API
-                    ├── structured interview and canvas output
-                    ├── native web search
-                    └── native deep research + background retrieval
+            └── provider adapter: structured interview and canvas output
 ```
 
 React mounts the workspace renderer from `lib/ui.ts`; the standalone demo runs that **same renderer**, not a separate mock design. This keeps the offline preview and connected interface consistent. `components/live-backend.ts` implements the same backend interface as `lib/demo.ts`.
@@ -70,7 +65,7 @@ lib/demo.ts                Explicitly scripted local backend
 lib/export.ts              Portable idea exports
 convex/access.ts           Verified-email access and admin allowlist
 convex/ideas.ts            Owner-scoped public queries/mutations
-convex/jobs.ts              Internal research job state transitions
+convex/jobs.ts              Internal AI job state transitions
 convex/runner.ts            Internal scheduled AI worker
 convex/providers.ts        Configurable server-only provider adapter
 convex/schema.ts           Database schema
@@ -82,11 +77,11 @@ scripts/test.mjs            Domain/UI typecheck, syntax check and mocked tests
 
 ### AI configuration
 
-Initial defaults are `gpt-4.1-mini` for the interview, `gpt-4.1` with hosted `web_search` for Intermediate, and `o3-deep-research` with `web_search_preview` for Advanced. The deep-research tool follows the provider’s deep-research examples; its type is configurable separately. There is no separate search API, search scraper, or client-side AI key.
+The active product uses a structured interview request without web tools. Basic, Intermediate and Advanced differ by interview depth, not by access to external research. Dormant research adapter code is retained for a later product review but is unreachable from the active worker.
 
-`AI_PROVIDER=openai` selects the initial adapter. `openai-compatible` may use a trusted HTTPS `OPENAI_BASE_URL`, but that endpoint must support the **Responses API, strict structured output, native web tools and background jobs**. A generic chat-completions endpoint is not enough. Other providers require implementing the small `AIProvider` interface and adding a factory entry; changing one environment variable cannot create an unsupported integration.
+`AI_PROVIDER` selects the server-side adapter. The selected provider must support the structured interview response contract. A generic chat-completions endpoint is not enough. Other providers require implementing the `AIProvider` interface and adding a factory entry.
 
-Source links are taken from provider URL annotations. A research response without verifiable citation annotations fails rather than being saved as evidence. The merge layer removes unknown source IDs and downgrades unsupported research-labeled canvas entries to assumptions. This does not prove that a cited page supports every AI interpretation; founders still need to review sources and test demand.
+The interview has no independent evidence. Founder statements remain self-reported, and every provider-generated inference is an assumption that founders still need to test.
 
 ## Connected setup
 

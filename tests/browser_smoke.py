@@ -92,13 +92,11 @@ with sync_playwright() as p:
     page.locator('dialog [data-action="close-dialog"]').click()
     # Upgrade keeps the same record and previous work.
     page.locator('[data-action="upgrade"]').first.click()
-    page.locator('#upgrade-consent').check()
     page.locator('#upgrade-form button[type="submit"]').click()
     check('Intermediate upgrade keeps the idea name', 'designer edition' in page.locator('.editable-title').inner_text())
     page.locator('[data-action="unsure"]').click()
     page.wait_for_timeout(520)
-    page.locator('[data-action="tab"][data-tab="research"]').click()
-    check('Demo research cannot be mistaken for actual findings', 'Demo only — no live searches' in page.locator('.research-report').inner_text())
+    check('Interview-only workspace has no Research tab', page.locator('[data-action="tab"][data-tab="research"]').count() == 0)
     # Keyboard navigation, source-safe canvas edit, and mobile breakpoints.
     page.locator('#tab-canvas').click()
     page.locator('#tab-canvas').focus()

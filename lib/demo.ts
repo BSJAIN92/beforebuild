@@ -67,11 +67,6 @@ export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
   for (const key of staged[Math.min(Math.max(next.answerCount - 1, 0), 4)]) if (!next.canvas[key].length) next.canvas[key] = [item(proposals[key])];
   const complete = finish || next.answerCount >= TIERS[next.tier].max;
   if (complete) for (const [key, value] of Object.entries(proposals)) if (!next.canvas[key as BlockKey].length) next.canvas[key as BlockKey] = [item(value)];
-  if (next.tier !== "basic" && next.answerCount >= 2 && !next.reports.some(r => r.kind === next.tier)) {
-    next.reports.push({ id: uid(), kind: next.tier, createdAt: Date.now(), demo: true, sources: [],
-      text: "This is a research workflow demonstration, not a market finding.\n\nIn the connected app, this step sends a minimized idea brief to the AI provider’s native web-research tool. It compares existing alternatives, looks for customer problem signals, and returns dated summaries with clickable citations. Advanced adds deeper investigation of switching costs, business economics, distribution and counterevidence.\n\nNo live searches were performed in this demo. No competitors, market sizes or customer demand claims have been fabricated." });
-    next.messages.push(makeMessage("system", "Demo checkpoint: in the connected app, AI research runs here before the next evidence-informed question. No live research was performed."));
-  }
   const base = [{ id: "pain", title: "Is the problem urgent enough to solve?", detail: "The founder’s description is a starting hypothesis, not yet evidence of how often customers face this problem.", test: "Ask five relevant people about the last time they experienced the problem. Listen for recent, specific examples.", severity: "high" as const, decision: "open" as const, sourceIds: [] },
     { id: "payment", title: "Willingness to pay is still an assumption", detail: "A useful concept and positive feedback do not tell us whether someone will pay for it.", test: "Offer a clearly scoped paid pilot, state a real test price, and record commitments rather than compliments.", severity: "high" as const, decision: "open" as const, sourceIds: [] },
     { id: "reach", title: "Getting the first customers needs a repeatable path", detail: "An acquisition channel is currently a proposed route, not a proven source of customers.", test: "Contact a small, relevant audience through one accessible channel and track replies and qualified conversations.", severity: "medium" as const, decision: "open" as const, sourceIds: [] }];
@@ -112,11 +107,10 @@ export function createDemoBackend(): Backend {
   return {
     snapshot: () => ({ ...data, storageAvailable: !persistenceError }),
     subscribe(fn) { listeners.add(fn); if (persistenceError) console.warn("Local persistence is unavailable. Export your work before closing this tab."); return () => listeners.delete(fn); },
-    async create(description, tier, _aiConsent, researchConsent) {
+    async create(description, tier, _aiConsent, _researchConsent) {
       if (description.trim().length < 20) throw new Error("Give us at least 20 characters about the person, problem, or idea.");
       if (description.length > 5000) throw new Error("Keep the initial idea under 5,000 characters.");
-      if (tier !== "basic" && !researchConsent) throw new Error("Please allow AI-led web research for this level.");
-      const idea = createIdea(description, tier, researchConsent, undefined, false); data.ideas.unshift(idea); emit(); return idea.id;
+      const idea = createIdea(description, tier, false, undefined, false); data.ideas.unshift(idea); emit(); return idea.id;
     },
     async send(id, text, finish = false) {
       const idea = get(id); if (isBusy(idea)) throw new Error("A response is already being prepared.");
@@ -132,11 +126,10 @@ export function createDemoBackend(): Backend {
     async editBlock(id, block, items) { if (isBusy(get(id))) throw new Error("Finish the current turn before editing."); update(id, i => ({ ...i, editedBlocks: [...new Set([...(i.editedBlocks || []), block])], canvas: { ...i.canvas, [block]: (items.length ? items : [{ id: uid(), text: "Left open by the founder; not yet decided", evidence: "assumption" as const, sourceIds: [] }]).map(x => ({ ...x, edited: true })) }, updatedAt: Date.now() })); },
     async rename(id, title) { update(id, i => ({ ...i, title: title.trim().slice(0, 100), titleEdited: true, updatedAt: Date.now() })); },
     async remove(id) { tokens.delete(id); data.ideas = data.ideas.filter(i => i.id !== id); emit(); },
-    async upgrade(id, tier, consent) {
+    async upgrade(id, tier, _consent) {
       const i = get(id); if (isBusy(i)) throw new Error("Finish the current turn before changing level.");
       if (tierRank(tier) <= tierRank(i.tier)) throw new Error("Choose a deeper level. Existing work is kept.");
-      if (!consent) throw new Error("Allow AI-led research to use this level.");
-      update(id, i => ({ ...i, tier, researchConsent: consent, status: "draft", statusLabel: "Ready to go deeper", question: questions[Math.min(i.answerCount, questions.length - 1)][0], questionHint: questions[Math.min(i.answerCount, questions.length - 1)][1], messages: [...i.messages, makeMessage("assistant", `You’re now exploring at ${TIERS[tier].label} level. Your work is kept.\n\n${questions[Math.min(i.answerCount, questions.length - 1)][0]}`)] }));
+      update(id, i => ({ ...i, tier, researchConsent: false, reports: [], status: "draft", statusLabel: "Ready to go deeper", question: questions[Math.min(i.answerCount, questions.length - 1)][0], questionHint: questions[Math.min(i.answerCount, questions.length - 1)][1], messages: [...i.messages, makeMessage("assistant", `You’re now exploring at ${TIERS[tier].label} level. Your work is kept.\n\n${questions[Math.min(i.answerCount, questions.length - 1)][0]}`)] }));
     },
     async decide(id, challengeId, decision) { update(id, i => ({ ...i, challenges: i.challenges.map(c => c.id === challengeId ? { ...c, decision } : c) })); },
     async toggleExperiment(id, experimentId) { update(id, i => ({ ...i, experiments: i.experiments.map(e => e.id === experimentId ? { ...e, done: !e.done } : e) })); },

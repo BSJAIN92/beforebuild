@@ -22,9 +22,9 @@ function check(dir) {
       const errors = (result.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error);
       if (errors.length) { console.error(ts.formatDiagnosticsWithColorAndContext(errors, { getCanonicalFileName: f => f, getCurrentDirectory: () => root, getNewLine: () => "\n" })); process.exit(1); }
       checked++;
-      if (file.endsWith(path.join("convex", "providers.ts"))) {
+      if (["providers.ts", "gemini.ts", "providerContext.ts"].some(name => file.endsWith(path.join("convex", name)))) {
         fs.mkdirSync(".test-build/convex", { recursive: true });
-        fs.writeFileSync(".test-build/convex/providers.js", result.outputText);
+        fs.writeFileSync(path.join(".test-build", "convex", path.basename(file, ".ts") + ".js"), result.outputText);
       }
     }
   }

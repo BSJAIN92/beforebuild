@@ -10,9 +10,11 @@
 
 import type * as abuse from "../abuse.js";
 import type * as access from "../access.js";
+import type * as gemini from "../gemini.js";
 import type * as guards from "../guards.js";
 import type * as ideas from "../ideas.js";
 import type * as jobs from "../jobs.js";
+import type * as providerContext from "../providerContext.js";
 import type * as providers from "../providers.js";
 import type * as runner from "../runner.js";
 import type * as settings from "../settings.js";
@@ -27,9 +29,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   abuse: typeof abuse;
   access: typeof access;
+  gemini: typeof gemini;
   guards: typeof guards;
   ideas: typeof ideas;
   jobs: typeof jobs;
+  providerContext: typeof providerContext;
   providers: typeof providers;
   runner: typeof runner;
   settings: typeof settings;

@@ -28,6 +28,12 @@ export default defineSchema({
     owner: v.string(), ideaId: v.id("ideas"), day: v.string(),
     basicTurns: v.optional(v.number()), intermediateTurns: v.optional(v.number()), advancedTurns: v.optional(v.number())
   }).index("by_owner_idea_day", ["owner", "ideaId", "day"]).index("by_idea", ["ideaId"]).index("by_day", ["day"]),
+  providerUsage: defineTable({ provider: v.literal("gemini"), day: v.string(), requests: v.number() })
+    .index("by_provider_day", ["provider", "day"]),
+  providerErrors: defineTable({
+    owner: v.string(), email: v.string(), ideaId: v.id("ideas"), tier: v.string(), provider: v.string(), operation: v.string(),
+    httpStatus: v.number(), providerStatus: v.string(), category: v.string(), message: v.string(), createdAt: v.number()
+  }).index("by_created", ["createdAt"]).index("by_email_created", ["email", "createdAt"]),
   bursts: defineTable({ owner: v.string(), minute: v.number(), messages: v.number() }).index("by_owner_minute", ["owner", "minute"]).index("by_minute", ["minute"]),
   rejectedInputs: defineTable({ owner: v.string(), email: v.string(), ideaId: v.id("ideas"), tier: v.string(), text: v.string(), reason: v.string(), source: v.union(v.literal("local"), v.literal("moderation")), createdAt: v.number() })
     .index("by_created", ["createdAt"]).index("by_owner_created", ["owner", "createdAt"])

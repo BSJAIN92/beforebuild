@@ -5,7 +5,7 @@ const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, cleanError, TIERS 
 const { demoTurn, createDemoBackend } = require('../.test-build/lib/demo.js');
 const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
 const { toMarkdown } = require('../.test-build/lib/export.js');
-const { resolveUsageLimit } = require('../.test-build/lib/limits.js');
+const { resolveUsageLimit, resolveGeminiDailyLimit, geminiQuotaDay } = require('../.test-build/lib/limits.js');
 const { founderInputError } = require('../.test-build/lib/input-policy.js');
 const { escapeHtml, richText } = require('../.test-build/lib/ui.js');
 const description = 'A small service helping freelance designers follow up on unpaid invoices.';
@@ -58,8 +58,7 @@ for (const tier of ['basic', 'intermediate', 'advanced']) test(`${tier}: complet
   for (let n = 0; n < TIERS[tier].max; n++) i = demoTurn(i, `Founder response ${n + 1}`);
   assert.equal(i.answerCount, TIERS[tier].max); assert.equal(i.status, 'ready'); assert.equal(coverage(i), 9);
   assert.ok(i.challenges.length >= 3); assert.ok(i.experiments.every(e => e.hypothesis && e.steps && e.metric));
-  if (tier === 'basic') assert.equal(i.reports.length, 0);
-  else { assert.equal(i.reports.length, 1); assert.ok(i.reports[0].demo); assert.equal(i.reports[0].sources.length, 0); assert.match(i.reports[0].text, /No live searches/); }
+  assert.equal(i.reports.length, 0);
 });
 test('unknown answers are assumptions, never founder evidence', () => {
   const i = demoTurn(idea(), 'I’m not sure yet.');
@@ -97,6 +96,12 @@ test('structured output rejects missing final blocks, duplicate blocks and empty
   const e = turn(); e.canvas[0].items[0].text = ''; assert.throws(() => parseTurn(JSON.stringify(e)), /empty or duplicate/);
   const f = turn(); f.experiments.push(f.experiments[0]); assert.throws(() => parseTurn(JSON.stringify(f)), /duplicate/);
 });
+test('server keeps a premature provider completion as an intermediate turn', () => {
+  const t = turn(); t.complete = true; t.canvas = t.canvas.slice(0, 2);
+  const parsed = parseTurn(JSON.stringify(t), false);
+  assert.equal(parsed.complete, false); assert.equal(parsed.canvas.length, 2);
+  assert.throws(() => parseTurn(JSON.stringify(t), true), /missing a section/);
+});
 test('AI cannot finish prematurely or omit the validation plan', () => {
   const t = turn(); t.complete = true; assert.throws(() => applyTurn(idea(), t), /before exploring/);
   const i = idea(); i.answerCount = 5; t.experiments = []; assert.throws(() => applyTurn(i, t), /validation plan/);
@@ -122,14 +127,21 @@ test('demo persists multiple ideas, upgrades preserve the same record and manual
   const restored = createDemoBackend().snapshot().ideas[0]; assert.equal(restored.id, id); assert.equal(restored.tier, 'intermediate'); assert.equal(restored.title, 'Chosen name'); assert.equal(restored.canvas.value[0].text, 'A founder edit');
   await assert.rejects(() => backend.upgrade(id, 'basic', false), /deeper level/);
 });
-test('AI and research consent are recorded separately', () => {
+test('new interview-only ideas store no research permission or reports', () => {
   const basic = createIdea(description, 'basic', false, 'basic-id', true);
   const research = createIdea(description, 'advanced', true, 'research-id', true);
   assert.equal(basic.aiConsent, true); assert.equal(basic.researchConsent, false);
-  assert.equal(research.aiConsent, true); assert.equal(research.researchConsent, true);
+  assert.equal(research.aiConsent, true); assert.equal(research.researchConsent, false); assert.deepEqual(research.reports, []);
 });
-test('research consent and input bounds are enforced in demo operations', async () => {
-  const b = createDemoBackend(); await assert.rejects(() => b.create(description, 'advanced', false, false), /allow AI-led/);
+test('Gemini disclosure is separate from the required consent checkbox', () => {
+  const ui = fs.readFileSync('lib/ui.ts', 'utf8');
+  assert.match(ui, /BeforeBuild currently uses Google Gemini for an interview based only on what you share\. It does not search the web\./);
+  assert.match(ui, /I agree to share my idea and relevant answers with Google’s Gemini API\./);
+  assert.match(ui, /free-tier content may be used to improve its products and may be reviewed by people/);
+  assert.match(ui, /I won’t include secrets, confidential information, or personal data\./);
+});
+test('interview-only levels need no research consent and input bounds remain enforced', async () => {
+  const b = createDemoBackend(); const id = await b.create(description, 'advanced', false, false); assert.equal(b.snapshot().ideas.find(i => i.id === id).reports.length, 0);
   await assert.rejects(() => b.create('tiny', 'basic', false, false), /20 characters/);
 });
 test('configuration details are removed from tester-facing AI errors', () => {
@@ -146,6 +158,15 @@ test('daily AI limits differ by level and remain configurable', () => {
   const overrides = { basicTurns: 7, intermediateResearch: 2, advancedTurns: 999 };
   assert.equal(resolveUsageLimit('basic', 'turns', configured, overrides), 7); assert.equal(resolveUsageLimit('intermediate', 'research', configured, overrides), 2); assert.equal(resolveUsageLimit('advanced', 'turns', configured, overrides), 500);
 });
+test('Gemini per-environment daily ceiling is configurable up to the confirmed project limit', () => {
+  assert.equal(resolveGeminiDailyLimit({}), 250); assert.equal(resolveGeminiDailyLimit({ GEMINI_MAX_DAILY_REQUESTS: '250' }), 250);
+  assert.equal(resolveGeminiDailyLimit({ GEMINI_MAX_DAILY_REQUESTS: '500' }), 500); assert.equal(resolveGeminiDailyLimit({ GEMINI_MAX_DAILY_REQUESTS: '501' }), 250); assert.equal(resolveGeminiDailyLimit({ GEMINI_MAX_DAILY_REQUESTS: 'invalid' }), 250);
+  assert.equal(geminiQuotaDay(Date.parse('2026-09-13T06:59:59Z')), '2026-09-12'); assert.equal(geminiQuotaDay(Date.parse('2026-09-13T07:00:00Z')), '2026-09-13');
+  const schema = fs.readFileSync('convex/schema.ts', 'utf8'); const jobs = fs.readFileSync('convex/jobs.ts', 'utf8'); const runner = fs.readFileSync('convex/runner.ts', 'utf8'); const abuse = fs.readFileSync('convex/abuse.ts', 'utf8');
+  assert.match(schema, /providerUsage: defineTable/); assert.match(schema, /by_provider_day/);
+  assert.match(jobs, /reserveGeminiRequest/); assert.match(jobs, /usage\.requests \+ 1/); assert.match(jobs, /daily beta capacity for this environment is used up/);
+  assert.equal((runner.match(/reserveGeminiRequest/g) || []).length, 1); assert.doesNotMatch(runner, /startResearch|researchReport|reserveResearch/); assert.match(abuse, /geminiRequests/); assert.match(abuse, /geminiLimit/);
+});
 test('daily AI message limits are isolated per idea', () => {
   const schema = fs.readFileSync('convex/schema.ts', 'utf8');
   const guards = fs.readFileSync('convex/guards.ts', 'utf8');
@@ -159,7 +180,7 @@ test('daily AI message limits are isolated per idea', () => {
   assert.match(ideas, /charge\(ctx, row\.owner, idea\.tier, "turns", row\._id\)/);
   assert.match(ideas, /query\("ideaUsage"\)\.withIndex\("by_idea"/);
   assert.match(ui, /Message limits apply separately to each idea/);
-  assert.match(ui, /Daily message limits per idea and research limits per user/);
+  assert.match(ui, /Message limits apply separately to each idea/);
   assert.match(ui, /Basic messages \/ idea/);
 });
 test('off-topic, generation, encoded media, and prompt attacks are rejected before AI use', () => {

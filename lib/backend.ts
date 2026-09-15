@@ -7,7 +7,7 @@ export type SupportStatus = "Not started" | "In progress" | "Completed";
 export interface SupportSubmission { id: string; email: string; name: string; queryType: SupportQueryType; message: string; status: SupportStatus; createdAt: number; updatedAt: number; }
 export interface Pricing { enabled: boolean; currency: string; intermediate: number; advanced: number; }
 export interface UsageLimits { basicTurns: number; intermediateTurns: number; intermediateResearch: number; advancedTurns: number; advancedResearch: number; }
-export interface AbuseDashboard { day: string; users: number; totals: { basicTurns: number; intermediateTurns: number; advancedTurns: number; intermediateResearch: number; advancedResearch: number; }; rejected: { id: string; email: string; ideaId: string; tier: string; text: string; reason: string; source: "local" | "moderation"; createdAt: number; }[]; }
+export interface AbuseDashboard { day: string; users: number; totals: { basicTurns: number; intermediateTurns: number; advancedTurns: number; intermediateResearch: number; advancedResearch: number; }; provider: { geminiRequests: number; geminiLimit: number; }; rejected: { id: string; email: string; ideaId: string; tier: string; text: string; reason: string; source: "local" | "moderation"; createdAt: number; }[]; }
 export interface Snapshot { storageAvailable?: boolean; ideas: Idea[]; viewer: Viewer; pricing: Pricing; usageLimits: UsageLimits; invites: Invite[]; waitlist: WaitlistEntry[]; support: SupportSubmission[]; abuse?: AbuseDashboard; }
 export interface Backend {
   snapshot(): Snapshot;

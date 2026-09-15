@@ -19,3 +19,12 @@ export function resolveUsageLimit(tier: Tier, kind: UsageKind, environment: Reco
   const value = Number(overrides[config.field] ?? environment[config.env] ?? config.fallback);
   return Number.isSafeInteger(value) && value > 0 ? Math.min(value, config.ceiling) : config.fallback;
 }
+export function resolveGeminiDailyLimit(environment: Record<string, string | undefined>): number {
+  const value = Number(environment.GEMINI_MAX_DAILY_REQUESTS ?? 250);
+  return Number.isSafeInteger(value) && value >= 1 && value <= 500 ? value : 250;
+}
+export function geminiQuotaDay(now = Date.now()): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
