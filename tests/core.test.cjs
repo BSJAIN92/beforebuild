@@ -1,7 +1,7 @@
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { BLOCKS, createIdea, coverage, evidenceCount, safeUrl, cleanError, TIERS } = require('../.test-build/lib/model.js');
+const { BLOCKS, createIdea, coverage, evidenceCount, reopenForRequiredAnswers, safeUrl, cleanError, TIERS } = require('../.test-build/lib/model.js');
 const { demoTurn, createDemoBackend } = require('../.test-build/lib/demo.js');
 const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
 const { toMarkdown } = require('../.test-build/lib/export.js');
@@ -65,8 +65,17 @@ test('unknown answers are assumptions, never founder evidence', () => {
   const i = demoTurn(idea(), 'I’m not sure yet.');
   assert.equal(i.canvas.customers[0].evidence, 'assumption'); assert.equal(evidenceCount(i, 'research'), 0);
 });
-test('early finish is explicit and fills all nine blocks', () => {
-  const i = demoTurn(idea(), '', true); assert.equal(i.status, 'ready'); assert.equal(i.answerCount, 0); assert.equal(coverage(i), 9);
+test('demo remains in progress until every answer is completed', () => {
+  let i = idea();
+  for (let n = 0; n < TIERS.basic.max - 1; n++) i = demoTurn(i, `Founder response ${n + 1}`);
+  assert.equal(i.status, 'draft'); assert.equal(i.answerCount, TIERS.basic.max - 1); assert.ok(coverage(i) > 0);
+});
+test('completed canvases below the new total reopen once without losing saved work', () => {
+  const completed = idea('basic'); completed.status = 'ready'; completed.answerCount = 5; completed.summary = 'Saved summary'; completed.canvas.customers = [{ id: 'saved', text: 'Saved customer', evidence: 'founder', sourceIds: [], edited: true }];
+  const reopened = reopenForRequiredAnswers(completed); const repeated = reopenForRequiredAnswers(reopened);
+  assert.equal(reopened.status, 'draft'); assert.equal(reopened.answerCount, 5); assert.equal(reopened.summary, 'Saved summary'); assert.deepEqual(reopened.canvas, completed.canvas);
+  assert.match(reopened.question, /more guided questions/); assert.equal(reopened.messages.filter(message => message.id === 'v3-required-answers-resume').length, 1); assert.equal(repeated.messages.filter(message => message.id === 'v3-required-answers-resume').length, 1);
+  const current = idea('basic'); current.status = 'ready'; current.answerCount = TIERS.basic.max; assert.equal(reopenForRequiredAnswers(current), current);
 });
 test('manual block edits and title survive AI updates', () => {
   const i = idea(); i.title = 'My chosen name'; i.titleEdited = true; i.editedBlocks = ['value'];
@@ -124,12 +133,13 @@ test('final validation still rejects a section missing from both saved and incom
   const t = turn(); delete t.complete; t.canvas = t.canvas.slice(1);
   assert.throws(() => applyTurn(i, parseTurn(JSON.stringify(t), true)), /final canvas is incomplete/);
 });
-test('AI cannot finish prematurely or omit the validation plan', () => {
-  const t = turn(); t.complete = true; assert.throws(() => applyTurn(idea(), t), /before exploring/);
-  const i = idea(); i.answerCount = 5; t.experiments = []; assert.throws(() => applyTurn(i, t), /validation plan/);
+test('AI cannot finish before the configured maximum or omit the validation plan', () => {
+  const t = turn(); t.complete = true; assert.throws(() => applyTurn(idea(), t), /before all interview answers/);
+  const i = idea(); i.answerCount = TIERS.basic.max; t.experiments = []; assert.throws(() => applyTurn(i, t), /validation plan/);
 });
-test('explicit early finish may bypass the usual interview minimum', () => {
-  const t = turn(); t.complete = true; const out = applyTurn(idea(), t, true); assert.equal(out.status, 'ready'); assert.equal(coverage(out), 9);
+test('one answer below the configured total cannot complete the interview', () => {
+  const i = idea(); i.answerCount = TIERS.basic.max - 1;
+  const t = turn(); t.complete = true; assert.throws(() => applyTurn(i, t), /before all interview answers/);
 });
 test('unsafe links and HTML are not rendered as executable content', () => {
   for (const url of ['javascript:alert(1)', 'data:text/html,bad', 'file:///etc/passwd', 'https://secret:pass@example.com', 'not-a-url']) assert.equal(safeUrl(url), null);
@@ -139,7 +149,9 @@ test('unsafe links and HTML are not rendered as executable content', () => {
   assert.ok(!result.includes('<script>')); assert.ok(!result.includes('href="javascript:')); assert.ok(result.includes('rel="noopener noreferrer"'));
 });
 test('Markdown export includes context, all blocks, decisions, experiments and demo disclaimer', () => {
-  const i = demoTurn(idea('intermediate'), 'Designers', true); const text = toMarkdown(i);
+  let i = idea('intermediate');
+  for (let n = 0; n < TIERS.intermediate.max; n++) i = demoTurn(i, `Founder response ${n + 1}`);
+  const text = toMarkdown(i);
   for (const b of BLOCKS) assert.ok(text.includes(b.label)); assert.ok(text.includes('## Interview')); assert.ok(text.includes('## Validation plan')); assert.ok(text.includes('not proof of demand'));
 });
 test('demo persists multiple ideas, upgrades preserve the same record and manual edits', async () => {
@@ -172,9 +184,9 @@ test('configuration details are removed from tester-facing AI errors', () => {
   assert.equal(cleanError(new Error('[CONVEX M(ideas:send)] [Request ID: abc123] Server Error Uncaught ConvexError: AI conversations are temporarily paused. Your work is saved. Please try again later.')), 'AI conversations are temporarily paused. Your work is saved. Please try again later.');
 });
 test('daily AI limits differ by level and remain configurable', () => {
-  assert.equal(resolveUsageLimit('basic', 'turns', {}), 10); assert.equal(resolveUsageLimit('basic', 'research', {}), 0);
-  assert.equal(resolveUsageLimit('intermediate', 'turns', {}), 15); assert.equal(resolveUsageLimit('intermediate', 'research', {}), 1);
-  assert.equal(resolveUsageLimit('advanced', 'turns', {}), 22); assert.equal(resolveUsageLimit('advanced', 'research', {}), 1);
+  assert.equal(resolveUsageLimit('basic', 'turns', {}), 8); assert.equal(resolveUsageLimit('basic', 'research', {}), 0);
+  assert.equal(resolveUsageLimit('intermediate', 'turns', {}), 20); assert.equal(resolveUsageLimit('intermediate', 'research', {}), 1);
+  assert.equal(resolveUsageLimit('advanced', 'turns', {}), 40); assert.equal(resolveUsageLimit('advanced', 'research', {}), 1);
   const configured = { AI_BASIC_DAILY_TURNS: '14', AI_ADVANCED_DAILY_RESEARCH: '3' };
   assert.equal(resolveUsageLimit('basic', 'turns', configured), 14); assert.equal(resolveUsageLimit('advanced', 'research', configured), 3);
   const overrides = { basicTurns: 7, intermediateResearch: 2, advancedTurns: 999 };
@@ -202,7 +214,7 @@ test('daily AI message limits are isolated per idea', () => {
   assert.match(ideas, /charge\(ctx, row\.owner, idea\.tier, "turns", row\._id\)/);
   assert.match(ideas, /query\("ideaUsage"\)\.withIndex\("by_idea"/);
   assert.match(ui, /Message limits apply separately to each idea/);
-  assert.match(ui, /Message limits apply separately to each idea/);
+  assert.match(ui, /final canvas and validation plan are ready after you answer every question/);
   assert.match(ui, /Basic messages \/ idea/);
 });
 test('off-topic, generation, encoded media, and prompt attacks are rejected before AI use', () => {

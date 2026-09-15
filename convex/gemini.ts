@@ -90,16 +90,16 @@ export class GeminiProvider implements AIProvider {
     }
   }
 
-  async interview(idea: Idea, finish: boolean): Promise<Turn> {
+  async interview(idea: Idea): Promise<Turn> {
     const data = await this.generate({
       input: JSON.stringify(interviewInput(idea)),
-      system_instruction: `${interviewInstructions(idea, finish)}\nThe complete nested JSON schema is: ${JSON.stringify(TURN_SCHEMA)}`,
+      system_instruction: `${interviewInstructions(idea)}\nThe complete nested JSON schema is: ${JSON.stringify(TURN_SCHEMA)}`,
       response_format: { type: "text", mime_type: "application/json", schema: TURN_SCHEMA },
       generation_config: { max_output_tokens: 6000 },
       store: false
     });
-    const turn = parseTurn(candidateText(data), finish || idea.answerCount >= TIERS[idea.tier].max);
-    if (!turn.complete && !finish && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
+    const turn = parseTurn(candidateText(data), idea.answerCount >= TIERS[idea.tier].max);
+    if (!turn.complete && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
     return turn;
   }
 

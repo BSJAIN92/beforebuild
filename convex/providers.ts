@@ -9,7 +9,7 @@ export interface ProviderResponse {
   output?: { type?: string; content?: { type?: string; text?: string; annotations?: { type?: string; url?: string; title?: string; start_index?: number; end_index?: number }[] }[] }[];
 }
 export interface AIProvider {
-  interview(idea: Idea, finish: boolean): Promise<Turn>;
+  interview(idea: Idea): Promise<Turn>;
   startResearch(idea: Idea): Promise<ProviderResponse>;
   retrieve(id: string): Promise<ProviderResponse>;
   cancel(id: string): Promise<void>;
@@ -43,16 +43,16 @@ class OpenAIProvider implements AIProvider {
     const data = await response.json() as ProviderResponse;
     return data;
   }
-  async interview(idea: Idea, finish: boolean): Promise<Turn> {
+  async interview(idea: Idea): Promise<Turn> {
     const response = await this.request("/responses", { method: "POST", body: JSON.stringify({
       model: process.env.AI_INTERVIEW_MODEL || "gpt-4.1-mini", store: false,
-      instructions: interviewInstructions(idea, finish), input: JSON.stringify(interviewInput(idea)),
+      instructions: interviewInstructions(idea), input: JSON.stringify(interviewInput(idea)),
       max_output_tokens: 6000,
       text: { format: { type: "json_schema", name: "business_model_turn", strict: true, schema: TURN_SCHEMA } }
     }) });
     if (response.status !== "completed") throw new Error("The AI response was interrupted or incomplete. Your answer is saved; please retry.");
-    const turn = parseTurn(textOutput(response), finish || idea.answerCount >= TIERS[idea.tier].max);
-    if (!turn.complete && !finish && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
+    const turn = parseTurn(textOutput(response), idea.answerCount >= TIERS[idea.tier].max);
+    if (!turn.complete && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
     return turn;
   }
   async startResearch(idea: Idea): Promise<ProviderResponse> {

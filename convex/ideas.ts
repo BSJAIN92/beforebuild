@@ -10,12 +10,12 @@ const tierValidator = v.union(v.literal("basic"), v.literal("intermediate"), v.l
 const evidenceValidator = v.union(v.literal("founder"), v.literal("research"), v.literal("assumption"));
 const idArgs = { id: v.id("ideas") };
 async function save(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea) { idea.updatedAt = Date.now(); await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt }); }
-async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, finish: boolean, inputMessageId?: string): Promise<void> {
+async function enqueue(ctx: MutationCtx, row: Doc<"ideas">, idea: Idea, inputMessageId?: string): Promise<void> {
   requireAIEnabled(); await throttle(ctx, row.owner);
   await charge(ctx, row.owner, idea.tier, "turns", row._id);
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   idea.status = "thinking"; idea.statusLabel = "Thinking through your answer"; idea.error = ""; idea.updatedAt = Date.now();
-  await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: finish, runMessageId: inputMessageId, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });
+  await ctx.db.patch(row._id, { document: encode(idea), title: idea.title, email: normalizeEmail((await ctx.auth.getUserIdentity())?.email || row.email), updatedAt: idea.updatedAt, runToken: token, runStage: "start", runStartedAt: Date.now(), runFinish: false, runMessageId: inputMessageId, leaseUntil: 0, responseId: undefined, researchKind: undefined, polls: 0 });
   await ctx.scheduler.runAfter(0, internal.runner.work, { id: row._id, token });
   await ctx.scheduler.runAfter(31 * 60 * 1000, internal.jobs.watchdog, { id: row._id, token });
 }
@@ -35,10 +35,10 @@ export const create = mutation({ args: { description: v.string(), tier: tierVali
   const id = await ctx.db.insert("ideas", { owner: viewer.owner, email: viewer.email, title: idea.title, updatedAt: idea.updatedAt, document: encode(idea) });
   idea.id = id; await ctx.db.patch(id, { document: encode(idea) }); return id;
 } });
-export const send = mutation({ args: { ...idArgs, text: v.string(), finish: v.optional(v.boolean()) }, handler: async (ctx, args) => {
+export const send = mutation({ args: { ...idArgs, text: v.string() }, handler: async (ctx, args) => {
   const { viewer, row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
   if (process.env.AI_ENABLED !== "true") return { ok: false as const, error: "AI conversations are temporarily paused. Your work is saved. Please try again later." };
-  const text = args.text.trim(); if (!text && !args.finish) throw new ConvexError("Write an answer, or choose to create a draft now.");
+  const text = args.text.trim(); if (!text) throw new ConvexError("Write an answer before continuing.");
   if (text.length > 4000) throw new ConvexError("Keep each answer under 4,000 characters.");
   if (text) { const policyError = founderInputError(text); if (policyError) {
     await ctx.db.insert("rejectedInputs", { owner: row.owner, email: viewer.email, ideaId: row._id, tier: idea.tier, text, reason: policyError, source: "local", createdAt: Date.now() });
@@ -47,19 +47,19 @@ export const send = mutation({ args: { ...idArgs, text: v.string(), finish: v.op
   if (idea.messages.length >= 100) throw new ConvexError("This exploration has reached its conversation limit. Export it and start a new version.");
   let inputMessageId: string | undefined;
   if (text) { const message = makeMessage("user", text); inputMessageId = message.id; idea.messages.push(message); idea.answerCount += 1; }
-  await enqueue(ctx, row, idea, !!args.finish, inputMessageId); return { ok: true as const };
+  await enqueue(ctx, row, idea, inputMessageId); return { ok: true as const };
 } });
 export const retry = mutation({ args: idArgs, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(idea.tier);
   if (idea.status !== "error") throw new ConvexError("There is no failed response to retry.");
-  await enqueue(ctx, row, idea, row.runFinish || false); // Reuse saved answers; do not append them twice.
+  await enqueue(ctx, row, idea); // Reuse saved answers; do not append them twice.
 } });
 export const upgrade = mutation({ args: { ...idArgs, tier: tierValidator, consent: v.boolean() }, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea); requireFreeBeta(args.tier);
   if (tierRank(args.tier) <= tierRank(idea.tier)) throw new ConvexError("Choose a deeper level. Your current work will be preserved.");
   idea.tier = args.tier; idea.researchConsent = false; idea.reports = [];
   idea.messages.push(makeMessage("system", `Founder upgraded to ${TIERS[args.tier].label}. Keep previous answers, edits, completed experiments, and decisions. Ask new, deeper questions rather than repeating earlier ones.`));
-  await enqueue(ctx, row, idea, false);
+  await enqueue(ctx, row, idea);
 } });
 export const editBlock = mutation({ args: { ...idArgs, block: v.string(), items: v.array(v.object({ id: v.string(), text: v.string(), evidence: evidenceValidator, sourceIds: v.array(v.string()), edited: v.optional(v.boolean()) })) }, handler: async (ctx, args) => {
   const { row, idea } = await owned(ctx, args.id); requireIdle(idea);

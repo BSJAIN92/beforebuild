@@ -1,4 +1,4 @@
-import { createIdea, emptyCanvas, isBusy, makeMessage, normalizeEmail, tierRank, TIERS, uid, type BlockKey, type CanvasItem, type ChallengeDecision, type Idea, type Tier } from "./model";
+import { createIdea, emptyCanvas, isBusy, makeMessage, normalizeEmail, reopenForRequiredAnswers, tierRank, TIERS, uid, type BlockKey, type CanvasItem, type ChallengeDecision, type Idea, type Tier } from "./model";
 import type { Backend, Pricing, Snapshot } from "./backend";
 const STORAGE_KEY = "beforebuild.demo.v1";
 const questions = [
@@ -45,7 +45,7 @@ export function seedIdea(): Idea {
   idea.challenges = [{ id: "pain", title: "A frustrating task is not always a paid problem", detail: "We have a plausible workflow, but no customer evidence yet that automated reminders are worth buying.", test: "Ask five freelance designers about the last overdue invoice, then offer a small manual pilot.", severity: "high", decision: "open", sourceIds: [] }];
   return idea;
 }
-export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
+export function demoTurn(idea: Idea, answer: string): Idea {
   const next = structuredClone(idea);
   if (answer) {
     const key: BlockKey = next.answerCount === 0 ? "customers" : questions[Math.min(next.answerCount - 1, questions.length - 1)][2];
@@ -65,7 +65,7 @@ export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
   };
   const staged: BlockKey[][] = [["value"], ["activities", "resources"], ["channels"], ["relationships", "partners"], ["costs", "revenue"]];
   for (const key of staged[Math.min(Math.max(next.answerCount - 1, 0), 4)]) if (!next.canvas[key].length) next.canvas[key] = [item(proposals[key])];
-  const complete = finish || next.answerCount >= TIERS[next.tier].max;
+  const complete = next.answerCount >= TIERS[next.tier].max;
   if (complete) for (const [key, value] of Object.entries(proposals)) if (!next.canvas[key as BlockKey].length) next.canvas[key as BlockKey] = [item(value)];
   const base = [{ id: "pain", title: "Is the problem urgent enough to solve?", detail: "The founder’s description is a starting hypothesis, not yet evidence of how often customers face this problem.", test: "Ask five relevant people about the last time they experienced the problem. Listen for recent, specific examples.", severity: "high" as const, decision: "open" as const, sourceIds: [] },
     { id: "payment", title: "Willingness to pay is still an assumption", detail: "A useful concept and positive feedback do not tell us whether someone will pay for it.", test: "Offer a clearly scoped paid pilot, state a real test price, and record commitments rather than compliments.", severity: "high" as const, decision: "open" as const, sourceIds: [] },
@@ -87,7 +87,7 @@ export function demoTurn(idea: Idea, answer: string, finish = false): Idea {
   return next;
 }
 export function createDemoBackend(): Backend {
-  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 10, intermediateTurns: 15, intermediateResearch: 1, advancedTurns: 22, advancedResearch: 1 }, invites: [], waitlist: [], support: [] };
+  let data: Snapshot = { ideas: [], viewer: { email: "founder@demo.local", name: "Alex", admin: true, demo: true }, pricing: { enabled: false, currency: "USD", intermediate: 0, advanced: 0 }, usageLimits: { basicTurns: 8, intermediateTurns: 20, intermediateResearch: 1, advancedTurns: 40, advancedResearch: 1 }, invites: [], waitlist: [], support: [] };
   let persistenceError = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -95,7 +95,7 @@ export function createDemoBackend(): Backend {
       const parsed = JSON.parse(raw) as Snapshot;
       if (Array.isArray(parsed.ideas) && parsed.ideas.every(i => i && typeof i.id === "string" && typeof i.description === "string" && i.canvas && Array.isArray(i.messages))) {
         data = { ...data, ideas: parsed.ideas, pricing: parsed.pricing || data.pricing, usageLimits: parsed.usageLimits || data.usageLimits, invites: parsed.invites || [], waitlist: parsed.waitlist || [], support: parsed.support || [] };
-        data.ideas = data.ideas.map(i => isBusy(i) ? { ...i, status: "draft", statusLabel: "Resumed from your last save" } : i);
+        data.ideas = data.ideas.map(i => reopenForRequiredAnswers(isBusy(i) ? { ...i, status: "draft", statusLabel: "Resumed from your last save" } : i));
       }
     }
   } catch { persistenceError = true; }
@@ -112,16 +112,16 @@ export function createDemoBackend(): Backend {
       if (description.length > 5000) throw new Error("Keep the initial idea under 5,000 characters.");
       const idea = createIdea(description, tier, false, undefined, false); data.ideas.unshift(idea); emit(); return idea.id;
     },
-    async send(id, text, finish = false) {
+    async send(id, text) {
       const idea = get(id); if (isBusy(idea)) throw new Error("A response is already being prepared.");
-      if (!text.trim() && !finish) return;
+      if (!text.trim()) return;
       if (text.length > 4000) throw new Error("Keep each answer under 4,000 characters.");
       const token = uid(); tokens.set(id, token);
       const pending = { ...idea, status: "thinking" as const, statusLabel: "Shaping your draft", messages: text.trim() ? [...idea.messages, makeMessage("user", text.trim())] : idea.messages };
       update(id, () => pending);
       await new Promise(resolve => setTimeout(resolve, 450));
       if (tokens.get(id) !== token || !data.ideas.some(i => i.id === id)) return;
-      update(id, () => demoTurn(pending, text.trim(), finish));
+      update(id, () => demoTurn(pending, text.trim()));
     },
     async editBlock(id, block, items) { if (isBusy(get(id))) throw new Error("Finish the current turn before editing."); update(id, i => ({ ...i, editedBlocks: [...new Set([...(i.editedBlocks || []), block])], canvas: { ...i.canvas, [block]: (items.length ? items : [{ id: uid(), text: "Left open by the founder; not yet decided", evidence: "assumption" as const, sourceIds: [] }]).map(x => ({ ...x, edited: true })) }, updatedAt: Date.now() })); },
     async rename(id, title) { update(id, i => ({ ...i, title: title.trim().slice(0, 100), titleEdited: true, updatedAt: Date.now() })); },

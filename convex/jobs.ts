@@ -27,7 +27,7 @@ export const claim = internalMutation({ args, handler: async (ctx, { id, token }
     await ctx.db.patch(id, { document: encode(idea), runToken: undefined, responseId: undefined }); return null;
   }
   await ctx.db.patch(id, { leaseUntil: Date.now() + 125000 });
-  return { idea: decode(row), stage: row.runStage || "start", responseId: row.responseId, finish: row.runFinish || false, polls: row.polls || 0, researchKind: row.researchKind, inputMessageId: row.runMessageId };
+  return { idea: decode(row), stage: row.runStage || "start", responseId: row.responseId, polls: row.polls || 0, researchKind: row.researchKind, inputMessageId: row.runMessageId };
 } });
 export const rejectModerated = internalMutation({ args: { ...args, messageId: v.string() }, handler: async (ctx, { id, token, messageId }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token || row.runMessageId !== messageId) return;
@@ -65,7 +65,7 @@ export const storeResearch = internalMutation({ args: { ...args, reportJson: v.s
 export const complete = internalMutation({ args: { ...args, turnJson: v.string() }, handler: async (ctx, { id, token, turnJson }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;
   const turn = JSON.parse(turnJson) as Turn;
-  const before = decode(row); const idea = applyTurn(before, turn, row.runFinish || false);
+  const before = decode(row); const idea = applyTurn(before, turn);
   const reply = turn.reply + (!idea.question || turn.reply.includes(idea.question) ? "" : "\n\n" + idea.question);
   idea.messages.push(makeMessage("assistant", reply));
   await ctx.db.patch(id, { document: encode(idea), title: idea.title, updatedAt: idea.updatedAt, runToken: undefined, runStage: undefined, runMessageId: undefined, leaseUntil: 0, responseId: undefined });

@@ -30,6 +30,10 @@ with sync_playwright() as p:
     page.evaluate("""() => { const store = new Map(); Object.defineProperty(window, 'localStorage', { value: {getItem: k => store.get(k) ?? null, setItem: (k,v) => store.set(k,v), removeItem: k => store.delete(k)} }); }""")
     page.set_content(HTML, wait_until='domcontentloaded')
     check('Home has exactly three tier choices', page.locator('.tier-card').count() == 3)
+    tier_text = page.locator('#new-idea-form .tier-grid').inner_text()
+    check('Plan cards show approved question and daily message limits', all(text in tier_text for text in ['6 focused questions to build the foundation', '8 AI messages per idea each day', '16 in-depth questions, including the Basic foundation', '20 AI messages per idea each day', '31 comprehensive questions, including Basic and Intermediate', '40 AI messages per idea each day']))
+    check('Plan-limit wording omits web research', 'Web research' not in tier_text)
+    check('Plan cards explain completion and daily reset', 'final canvas and validation plan are ready after you answer every question' in page.locator('.plan-limits-note').first.inner_text() and '00:00 UTC' in page.locator('.plan-limits-note').first.inner_text())
     start = page.locator('#new-idea-form .start-button')
     raw = page.locator('#raw-idea')
     check('New idea button starts disabled', start.is_disabled())
@@ -58,8 +62,8 @@ with sync_playwright() as p:
     page.locator('#idea-name').fill('Nudge — designer edition')
     page.locator('#rename-form button[type="submit"]').click()
     check('Renamed idea appears in workspace', 'designer edition' in page.locator('.editable-title').inner_text())
-    # Sample starts with two saved answers. Three more finish Basic.
-    for answer in ['A small monthly fee after a paid pilot.', 'My freelance design community.', 'Ten hours a week and a small hosting budget.']:
+    # Sample starts with two saved answers. Four more finish Basic.
+    for answer in ['A small monthly fee after a paid pilot.', 'My freelance design community.', 'Ten hours a week and a small hosting budget.', 'I will test it with five designers this week.']:
         page.locator('#chat-input').fill(answer)
         page.locator('#chat-form button[type="submit"]').click()
         page.wait_for_timeout(520)
@@ -134,16 +138,13 @@ with sync_playwright() as p:
     check('Library search filters ideas', page.locator('.library-grid .idea-card:visible').count() == 0)
     page.locator('#idea-search').fill('Nudge')
     check('Library search restores matching ideas', page.locator('.library-grid .idea-card:visible').count() == 1)
-    # New raw idea from scratch and early completion.
+    # New raw idea from scratch without an early-finish control.
     page.locator('[data-action="new"]').first.click()
     page.locator('#raw-idea').fill('A booking reminder service for independent neighborhood tutors.')
     page.locator('[data-action="tier"][data-tier="basic"]').click()
     page.locator('#new-idea-form button[type="submit"]').click()
     check('Raw idea creates an empty canvas and first question', page.locator('.canvas-block.has-content').count() == 0 and page.locator('#chat-input').count() == 1)
-    page.locator('[data-action="finish"]').first.click()
-    page.locator('[data-action="confirm-finish"]').click()
-    page.wait_for_timeout(520)
-    check('Explicit early draft creates all nine sections', page.locator('.canvas-block.has-content').count() == 9)
+    check('Early finish option is absent', page.locator('[data-action="finish"]').count() == 0 and page.locator('[data-action="confirm-finish"]').count() == 0)
     page.locator('[data-action="ideas"]').click()
     check('Multiple separate saved ideas are supported', page.locator('.library-grid .idea-card').count() == 2)
     page.locator('[data-action="delete"]').first.click()

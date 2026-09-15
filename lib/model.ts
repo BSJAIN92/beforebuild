@@ -40,9 +40,9 @@ export interface Idea {
 }
 export interface TierConfig { label: string; min: number; max: number; description: string; research: string; }
 export const TIERS: Record<Tier, TierConfig> = {
-  basic: { label: "Basic", min: 3, max: 5, description: "Build a clear foundation.", research: "Customer, problem, workaround, and first test." },
-  intermediate: { label: "Intermediate", min: 6, max: 10, description: "Examine the business model.", research: "Alternatives, acquisition, payment, delivery, and risk." },
-  advanced: { label: "Advanced", min: 12, max: 18, description: "Pressure-test the opportunity.", research: "Switching, economics, retention, distribution, constraints, and counterevidence." }
+  basic: { label: "Basic", min: 6, max: 6, description: "Build a clear foundation.", research: "Customer, problem, workaround, and first test." },
+  intermediate: { label: "Intermediate", min: 16, max: 16, description: "Examine the business model.", research: "Alternatives, acquisition, payment, delivery, and risk." },
+  advanced: { label: "Advanced", min: 31, max: 31, description: "Pressure-test the opportunity.", research: "Switching, economics, retention, distribution, constraints, and counterevidence." }
 };
 export function emptyCanvas(): Canvas {
   return Object.fromEntries(BLOCKS.map(b => [b.key, []])) as unknown as Canvas;
@@ -66,6 +66,12 @@ export function createIdea(description: string, tier: Tier, _researchConsent: bo
 export function coverage(idea: Idea): number { return BLOCKS.filter(b => idea.canvas[b.key]?.length).length; }
 export function evidenceCount(idea: Idea, type: Evidence): number { return Object.values(idea.canvas).flat().filter(i => i.evidence === type).length; }
 export function isBusy(idea: Idea): boolean { return idea.status === "thinking" || idea.status === "researching"; }
+export const REQUIRED_ANSWERS_RESUME_ID = "v3-required-answers-resume";
+export function reopenForRequiredAnswers(idea: Idea): Idea {
+  if (idea.status !== "ready" || idea.answerCount >= TIERS[idea.tier].max) return idea;
+  const question = "Your plan now includes more guided questions. What important part of this business still feels most uncertain to you?";
+  return { ...idea, status: "draft", statusLabel: "More questions are ready", question, questionHint: "Choose the customer, problem, alternative, price, delivery, or risk you most want to examine.", error: "", messages: idea.messages.some(message => message.id === REQUIRED_ANSWERS_RESUME_ID) ? idea.messages : [...idea.messages, { id: REQUIRED_ANSWERS_RESUME_ID, role: "assistant", text: question, createdAt: idea.updatedAt }] };
+}
 export function tierRank(tier: Tier): number { return ["basic", "intermediate", "advanced"].indexOf(tier); }
 export function needsResearch(idea: Idea): boolean {
   return false;

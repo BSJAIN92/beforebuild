@@ -13,7 +13,7 @@ export interface Backend {
   snapshot(): Snapshot;
   subscribe(callback: () => void): () => void;
   create(description: string, tier: Tier, aiConsent: boolean, researchConsent: boolean): Promise<string>;
-  send(id: string, text: string, finish?: boolean): Promise<void>;
+  send(id: string, text: string): Promise<void>;
   editBlock(id: string, block: BlockKey, items: CanvasItem[]): Promise<void>;
   rename(id: string, title: string): Promise<void>;
   remove(id: string): Promise<void>;

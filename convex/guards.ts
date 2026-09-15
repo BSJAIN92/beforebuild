@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { requireViewer } from "./access";
-import { isBusy, type Idea, type Tier } from "../lib/model";
+import { isBusy, reopenForRequiredAnswers, type Idea, type Tier } from "../lib/model";
 import { resolveUsageLimit, USAGE_LIMITS, type UsageKind } from "../lib/limits";
 export function decode(row: Doc<"ideas">): Idea {
   const idea = JSON.parse(row.document) as Idea;
@@ -13,7 +13,7 @@ export function decode(row: Doc<"ideas">): Idea {
     item.sourceIds = [];
   }
   for (const challenge of idea.challenges) challenge.sourceIds = [];
-  return idea;
+  return reopenForRequiredAnswers(idea);
 }
 export function encode(idea: Idea): string { const json = JSON.stringify(idea); if (new TextEncoder().encode(json).byteLength > 420000) throw new ConvexError("This idea is too large. Export it and begin a new exploration."); return json; }
 export function limit(key: string, fallback: number, ceiling: number): number {

@@ -4,13 +4,13 @@ export type UsageField = "basicTurns" | "intermediateTurns" | "advancedTurns" | 
 export interface UsageConfig { field: UsageField; env: string; fallback: number; ceiling: number; }
 export type UsageLimitOverrides = Partial<Record<UsageField, number>>;
 export const USAGE_LIMITS: Record<Tier, Partial<Record<UsageKind, UsageConfig>>> = {
-  basic: { turns: { field: "basicTurns", env: "AI_BASIC_DAILY_TURNS", fallback: 10, ceiling: 500 } },
+  basic: { turns: { field: "basicTurns", env: "AI_BASIC_DAILY_TURNS", fallback: 8, ceiling: 500 } },
   intermediate: {
-    turns: { field: "intermediateTurns", env: "AI_INTERMEDIATE_DAILY_TURNS", fallback: 15, ceiling: 500 },
+    turns: { field: "intermediateTurns", env: "AI_INTERMEDIATE_DAILY_TURNS", fallback: 20, ceiling: 500 },
     research: { field: "intermediateResearch", env: "AI_INTERMEDIATE_DAILY_RESEARCH", fallback: 1, ceiling: 20 }
   },
   advanced: {
-    turns: { field: "advancedTurns", env: "AI_ADVANCED_DAILY_TURNS", fallback: 22, ceiling: 500 },
+    turns: { field: "advancedTurns", env: "AI_ADVANCED_DAILY_TURNS", fallback: 40, ceiling: 500 },
     research: { field: "advancedResearch", env: "AI_ADVANCED_DAILY_RESEARCH", fallback: 1, ceiling: 20 }
   }
 };
