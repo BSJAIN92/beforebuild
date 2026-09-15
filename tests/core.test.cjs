@@ -167,12 +167,11 @@ test('new interview-only ideas store no research permission or reports', () => {
   assert.equal(basic.aiConsent, true); assert.equal(basic.researchConsent, false);
   assert.equal(research.aiConsent, true); assert.equal(research.researchConsent, false); assert.deepEqual(research.reports, []);
 });
-test('Gemini disclosure is separate from the required consent checkbox', () => {
+test('Gemini consent uses the approved short wording', () => {
   const ui = fs.readFileSync('lib/ui.ts', 'utf8');
-  assert.match(ui, /BeforeBuild currently uses Google Gemini for an interview based only on what you share\. It does not search the web\./);
-  assert.match(ui, /I agree to share my idea and relevant answers with Google’s Gemini API\./);
-  assert.match(ui, /free-tier content may be used to improve its products and may be reviewed by people/);
-  assert.match(ui, /I won’t include secrets, confidential information, or personal data\./);
+  assert.match(ui, /I agree to share my idea and relevant answers with Google’s Gemini API\. I won’t include secrets, confidential information, or personal data\./);
+  assert.doesNotMatch(ui, /BeforeBuild currently uses Google Gemini for an interview based only on what you share\. It does not search the web\./);
+  assert.doesNotMatch(ui, /free-tier content may be used to improve its products and may be reviewed by people/);
 });
 test('interview-only levels need no research consent and input bounds remain enforced', async () => {
   const b = createDemoBackend(); const id = await b.create(description, 'advanced', false, false); assert.equal(b.snapshot().ideas.find(i => i.id === id).reports.length, 0);
