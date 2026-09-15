@@ -3,7 +3,7 @@ const string = { type: "string" };
 const array = (items: unknown) => ({ type: "array", items });
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 export const TURN_SCHEMA = object({
-  title: string, reply: string, question: string, questionHint: string, suggestions: array(string), complete: { type: "boolean" }, summary: string,
+  title: string, reply: string, question: string, questionHint: string, suggestions: array(string), summary: string,
   canvas: array(object({ block: { type: "string", enum: BLOCKS.map(b => b.key) }, items: array(object({ id: string, text: string, evidence: { type: "string", enum: ["founder", "research", "assumption"] }, sourceIds: array(string) })) })),
   challenges: array(object({ id: string, title: string, detail: string, test: string, severity: { type: "string", enum: ["high", "medium", "low"] }, sourceIds: array(string) })),
   experiments: array(object({ id: string, title: string, hypothesis: string, steps: string, metric: string, effort: string, priority: { type: "string", enum: ["high", "medium", "low"] } }))
@@ -13,46 +13,61 @@ export interface Turn {
   complete: boolean; summary: string; canvas: { block: BlockKey; items: CanvasItem[] }[];
   challenges: Omit<Challenge, "decision">[]; experiments: Omit<Experiment, "done">[];
 }
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The AI returned an invalid response. Please retry.");
+export interface AIResponseDiagnostic { category: string; path: string; actual?: number; limit?: number; structureJson: string; responseText: string; }
+export class AIResponseValidationError extends Error {
+  constructor(message: string, readonly diagnostic: AIResponseDiagnostic) { super(message); this.name = "AIResponseValidationError"; }
+}
+class ValidationFailure extends Error { constructor(message: string, readonly category: string, readonly path: string, readonly actual?: number, readonly limit?: number) { super(message); } }
+function record(value: unknown, path = "$."): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ValidationFailure("The AI returned an invalid response. Please retry.", "invalid-object", path);
   return value as Record<string, unknown>;
 }
-function text(value: unknown, limit = 4000): string {
-  if (typeof value !== "string" || value.length > limit) throw new Error("The AI response contained an invalid text field. Please retry.");
+function text(value: unknown, limit = 4000, path = "$"): string {
+  if (typeof value !== "string" || value.length > limit) throw new ValidationFailure("The AI response contained an invalid text field. Please retry.", "invalid-text", path, typeof value === "string" ? value.length : undefined, limit);
   return value.trim();
 }
-function checkedArray(value: unknown, max = 30): unknown[] {
-  if (!Array.isArray(value) || value.length > max) throw new Error("The AI response exceeded the allowed size. Please retry.");
-  return value;
+function checkedArray(value: unknown, max = 30, path = "$"): unknown[] {
+  if (!Array.isArray(value)) throw new ValidationFailure("The AI response contained an invalid list. Please retry.", "invalid-array", path, undefined, max);
+  return value.slice(0, max);
 }
-function enumValue<T extends string>(value: unknown, allowed: readonly T[]): T {
-  if (typeof value !== "string" || !allowed.includes(value as T)) throw new Error("The AI returned an invalid field. Please retry.");
+function enumValue<T extends string>(value: unknown, allowed: readonly T[], path = "$"): T {
+  if (typeof value !== "string" || !allowed.includes(value as T)) throw new ValidationFailure("The AI returned an invalid field. Please retry.", "invalid-enum", path);
   return value as T;
 }
-export function parseTurn(raw: string, completionAllowed = true): Turn {
-  const value = record(JSON.parse(raw));
-  if (typeof value.complete !== "boolean") throw new Error("The AI response was incomplete. Please retry.");
-  const complete = value.complete && completionAllowed;
-  const blocks = checkedArray(value.canvas, 9).map(v => {
-    const b = record(v);
-    return { block: enumValue(b.block, BLOCKS.map(x => x.key)), items: checkedArray(b.items, 8).map(v => {
-      const i = record(v);
-      return { id: text(i.id, 100), text: text(i.text, 1200), evidence: enumValue<Evidence>(i.evidence, ["founder", "research", "assumption"]), sourceIds: checkedArray(i.sourceIds, 10).map(v => text(v, 100)) };
+function structure(value: Record<string, unknown>): string {
+  const arrayLength = (v: unknown) => Array.isArray(v) ? v.length : null;
+  const textLength = (v: unknown) => typeof v === "string" ? v.length : null;
+  const canvas = Array.isArray(value.canvas) ? value.canvas.map((entry, index) => {
+    const block = entry && typeof entry === "object" && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
+    return { index, block: typeof block.block === "string" && BLOCKS.some(item => item.key === block.block) ? block.block : "invalid", items: arrayLength(block.items), sourceIds: Array.isArray(block.items) ? block.items.map(item => item && typeof item === "object" && !Array.isArray(item) ? arrayLength((item as Record<string, unknown>).sourceIds) : null) : [] };
+  }) : [];
+  const challenges = Array.isArray(value.challenges) ? value.challenges.map((entry, index) => ({ index, sourceIds: entry && typeof entry === "object" && !Array.isArray(entry) ? arrayLength((entry as Record<string, unknown>).sourceIds) : null })) : [];
+  return JSON.stringify({ topLevelKeys: Object.keys(value).sort().slice(0, 30), arrays: { canvas: arrayLength(value.canvas), challenges: arrayLength(value.challenges), experiments: arrayLength(value.experiments), suggestions: arrayLength(value.suggestions) }, textLengths: { title: textLength(value.title), reply: textLength(value.reply), question: textLength(value.question), questionHint: textLength(value.questionHint), summary: textLength(value.summary) }, canvas, challenges }).slice(0, 12000);
+}
+export function parseTurn(raw: string, complete = false): Turn {
+  let value: Record<string, unknown>; try { value = record(JSON.parse(raw), "$"); } catch (error) { if (error instanceof ValidationFailure) throw new AIResponseValidationError(error.message, { category: error.category, path: error.path, actual: error.actual, limit: error.limit, structureJson: "{}", responseText: raw }); throw new AIResponseValidationError("The AI returned invalid JSON. Please retry.", { category: "invalid-json", path: "$", structureJson: "{}", responseText: raw }); }
+  const summary = structure(value);
+  try {
+  const blocks = checkedArray(value.canvas, 9, "$.canvas").map((v, blockIndex) => {
+    const b = record(v, `$.canvas[${blockIndex}]`);
+    return { block: enumValue(b.block, BLOCKS.map(x => x.key), `$.canvas[${blockIndex}].block`), items: checkedArray(b.items, 8, `$.canvas[${blockIndex}].items`).map((v, itemIndex) => {
+      const i = record(v, `$.canvas[${blockIndex}].items[${itemIndex}]`);
+      return { id: text(i.id, 100, `$.canvas[${blockIndex}].items[${itemIndex}].id`), text: text(i.text, 1200, `$.canvas[${blockIndex}].items[${itemIndex}].text`), evidence: enumValue<Evidence>(i.evidence, ["founder", "research", "assumption"], `$.canvas[${blockIndex}].items[${itemIndex}].evidence`), sourceIds: checkedArray(i.sourceIds, 10, `$.canvas[${blockIndex}].items[${itemIndex}].sourceIds`).map((v, sourceIndex) => text(v, 100, `$.canvas[${blockIndex}].items[${itemIndex}].sourceIds[${sourceIndex}]`)) };
     }) };
   });
-  if (new Set(blocks.map(b => b.block)).size !== blocks.length) throw new Error("The AI returned duplicate canvas sections. Please retry.");
-  if (complete && (blocks.length !== 9 || blocks.some(b => !b.items.length))) throw new Error("The final canvas was missing a section. Please retry.");
-  const challenges = checkedArray(value.challenges, 8).map(v => {
-    const c = record(v);
-    return { id: text(c.id, 100), title: text(c.title, 160), detail: text(c.detail, 1600), test: text(c.test, 1200), severity: enumValue(c.severity, ["high", "medium", "low"] as const), sourceIds: checkedArray(c.sourceIds, 10).map(v => text(v, 100)) };
+  if (new Set(blocks.map(b => b.block)).size !== blocks.length) throw new ValidationFailure("The AI returned duplicate canvas sections. Please retry.", "duplicate-block", "$.canvas");
+  const challenges = checkedArray(value.challenges, 8, "$.challenges").map((v, index) => {
+    const c = record(v, `$.challenges[${index}]`);
+    return { id: text(c.id, 100, `$.challenges[${index}].id`), title: text(c.title, 160, `$.challenges[${index}].title`), detail: text(c.detail, 1600, `$.challenges[${index}].detail`), test: text(c.test, 1200, `$.challenges[${index}].test`), severity: enumValue(c.severity, ["high", "medium", "low"] as const, `$.challenges[${index}].severity`), sourceIds: checkedArray(c.sourceIds, 10, `$.challenges[${index}].sourceIds`).map((v, sourceIndex) => text(v, 100, `$.challenges[${index}].sourceIds[${sourceIndex}]`)) };
   });
-  const experiments = checkedArray(value.experiments, 10).map(v => {
-    const e = record(v);
+  const experiments = checkedArray(value.experiments, 10, "$.experiments").map((v, index) => {
+    const e = record(v, `$.experiments[${index}]`);
     return { id: text(e.id, 100), title: text(e.title, 160), hypothesis: text(e.hypothesis, 1000), steps: text(e.steps, 1800), metric: text(e.metric, 1000), effort: text(e.effort, 160), priority: enumValue(e.priority, ["high", "medium", "low"] as const) };
   });
   const uniqueIds = (items: { id: string }[]) => items.every(i => i.id.length > 0) && new Set(items.map(i => i.id)).size === items.length;
-  if (!blocks.every(b => uniqueIds(b.items) && b.items.every(i => i.text.length > 0)) || !uniqueIds(challenges) || !uniqueIds(experiments)) throw new Error("The AI returned empty or duplicate entries. Please retry.");
-  return { title: text(value.title, 100), reply: text(value.reply, 4000), question: text(value.question, 800), questionHint: text(value.questionHint, 1000), suggestions: checkedArray(value.suggestions, 3).map(v => text(v, 300)), complete, summary: text(value.summary, 4000), canvas: blocks, challenges, experiments };
+  if (!blocks.every(b => uniqueIds(b.items) && b.items.every(i => i.text.length > 0)) || !uniqueIds(challenges) || !uniqueIds(experiments)) throw new ValidationFailure("The AI returned empty or duplicate entries. Please retry.", "invalid-identifiers", "$");
+  return { title: text(value.title, 100, "$.title"), reply: text(value.reply, 4000, "$.reply"), question: text(value.question, 800, "$.question"), questionHint: text(value.questionHint, 1000, "$.questionHint"), suggestions: checkedArray(value.suggestions, 3, "$.suggestions").map((v, index) => text(v, 300, `$.suggestions[${index}]`)), complete, summary: text(value.summary, 4000, "$.summary"), canvas: blocks, challenges, experiments };
+  } catch (error) { if (error instanceof ValidationFailure) throw new AIResponseValidationError(error.message, { category: error.category, path: error.path, actual: error.actual, limit: error.limit, structureJson: summary, responseText: raw }); throw error; }
 }
 export function applyTurn(idea: Idea, turn: Turn, finish = false): Idea {
   const knownSources = new Set(idea.reports.flatMap(r => r.sources.map(s => s.id)));
@@ -94,7 +109,7 @@ CURRENT LEVEL: ${idea.tier}. Aim for ${tier.min}-${tier.max} total answers. Answ
   This product is interview-only. You have no web access or independent evidence in this task. Never present a competitor, price, market size, law, trend, customer opinion, or statistic as known unless the founder supplied it. Treat every model inference as an assumption. Ask what the founder has directly observed and how they know it.
   APPROVED TOPICS: Basic covers the specific customer, problem, current workaround (including doing nothing), desired result, how to reach five people, and the smallest test before building. Intermediate also covers user/decider/payer, urgency trigger, alternatives, switching reason, observed proof, repeatable acquisition, payment model, delivery work, fastest-failing assumption, and a decision-changing test. Advanced also covers frequency and cost, buying trigger, what is good enough today, blockers, switching friction, value threshold, first-ten-customer channel, channel durability, price evidence, unit economics as assumptions, value behavior, retention/cancellation, defensibility, founder constraints, and counterevidence. Choose the most relevant unanswered topic, tailor it to the latest answer, ask exactly one question, and do not leave this approved bank.
   Basic: few essential questions and gentle challenges. Intermediate: probe alternatives, differentiation, acquisition, payment, delivery, and risk with 3-5 challenges. Advanced: extensively probe customer behavior, buying authority, substitutes, switching costs, reachable distribution, bottom-up economics, retention, founder constraints and counterevidence, with 5-8 challenges.
-${finish || idea.answerCount >= tier.max ? "FINALIZE NOW. Set complete true. Fill ALL NINE canvas sections with useful specific points, even if uncertain. Label any proposed or missing detail as an assumption. Include a plain-language summary, prioritized assumptions/challenges, and concrete validation experiments with hypothesis, action, measurable success threshold, effort and priority. Never invent a market size, price, interview, purchase or validation result." : `Set complete false until at least ${tier.min} answers. You may finalize between ${tier.min} and ${tier.max} answers if sufficient. Keep updating the canvas as evidence accumulates.`}
+${finish || idea.answerCount >= tier.max ? "FINALIZE NOW. Fill ALL NINE canvas sections with useful specific points, even if uncertain. Label any proposed or missing detail as an assumption. Include a plain-language summary, prioritized assumptions/challenges, and concrete validation experiments with hypothesis, action, measurable success threshold, effort and priority. Never invent a market size, price, interview, purchase or validation result." : `Continue the interview. Keep asking one useful question and updating the canvas until ${tier.max} answers have been collected or the founder explicitly asks to finish. The server controls when the interview ends.`}
   EVIDENCE: 'founder' means a claim stated by the founder, NOT independently validated. New output must never use 'research'. 'assumption' is any inference, proposal, guess, unsupported statistic or missing fact. Never label a business as validated. Do not fabricate URLs, sources, prices, competitors, market facts, customer behavior, laws, or statistics.
 DECISIONS: Respect founder accept/revise/decline decisions. Explain tradeoffs, do not gatekeep or issue an investment score. Retain manual edits (edited=true), stable canvas item IDs, challenge IDs, experiment IDs and completed experiments. Keep items concise. Avoid duplicating items. Include existing useful items in each returned block. For an unchanged item reuse its ID. The nine sections are partners, activities, resources, value, relationships, channels, customers, costs, revenue. Separate existing facts from suggested operating choices. Final output is a draft to test, not a guarantee.
 Return ONLY the required JSON structure.`;

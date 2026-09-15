@@ -34,6 +34,10 @@ export default defineSchema({
     owner: v.string(), email: v.string(), ideaId: v.id("ideas"), tier: v.string(), provider: v.string(), operation: v.string(),
     httpStatus: v.number(), providerStatus: v.string(), category: v.string(), message: v.string(), createdAt: v.number()
   }).index("by_created", ["createdAt"]).index("by_email_created", ["email", "createdAt"]),
+  aiResponseErrors: defineTable({
+    email: v.optional(v.string()), ideaId: v.optional(v.id("ideas")), provider: v.string(), model: v.string(), operation: v.string(), tier: v.string(), answerCount: v.number(), finish: v.boolean(),
+    category: v.string(), path: v.string(), actual: v.optional(v.number()), limit: v.optional(v.number()), message: v.string(), structureJson: v.string(), prompt: v.optional(v.string()), responseText: v.optional(v.string()), createdAt: v.number()
+  }).index("by_created", ["createdAt"]),
   bursts: defineTable({ owner: v.string(), minute: v.number(), messages: v.number() }).index("by_owner_minute", ["owner", "minute"]).index("by_minute", ["minute"]),
   rejectedInputs: defineTable({ owner: v.string(), email: v.string(), ideaId: v.id("ideas"), tier: v.string(), text: v.string(), reason: v.string(), source: v.union(v.literal("local"), v.literal("moderation")), createdAt: v.number() })
     .index("by_created", ["createdAt"]).index("by_owner_created", ["owner", "createdAt"])

@@ -51,7 +51,7 @@ class OpenAIProvider implements AIProvider {
       text: { format: { type: "json_schema", name: "business_model_turn", strict: true, schema: TURN_SCHEMA } }
     }) });
     if (response.status !== "completed") throw new Error("The AI response was interrupted or incomplete. Your answer is saved; please retry.");
-    const turn = parseTurn(textOutput(response), finish || idea.answerCount >= TIERS[idea.tier].min);
+    const turn = parseTurn(textOutput(response), finish || idea.answerCount >= TIERS[idea.tier].max);
     if (!turn.complete && !finish && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
     return turn;
   }

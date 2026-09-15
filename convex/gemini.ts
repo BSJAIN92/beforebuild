@@ -98,7 +98,7 @@ export class GeminiProvider implements AIProvider {
       generation_config: { max_output_tokens: 6000 },
       store: false
     });
-    const turn = parseTurn(candidateText(data), finish || idea.answerCount >= TIERS[idea.tier].min);
+    const turn = parseTurn(candidateText(data), finish || idea.answerCount >= TIERS[idea.tier].max);
     if (!turn.complete && !finish && turn.question.length < 5) throw new Error("The AI did not return a useful next question. Please retry.");
     return turn;
   }

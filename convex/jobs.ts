@@ -6,6 +6,7 @@ import { charge, decode, encode, refundTurn } from "./guards";
 import { applyTurn, type Turn } from "../lib/ai-contract";
 import { makeMessage, type ResearchReport } from "../lib/model";
 import { geminiQuotaDay, resolveGeminiDailyLimit } from "../lib/limits";
+import { redactDiagnosticContent } from "../lib/diagnostics";
 const args = { id: v.id("ideas"), token: v.string() };
 export const reserveGeminiRequest = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const idea = await ctx.db.get(id); if (!idea || idea.runToken !== token) return false;
@@ -84,6 +85,13 @@ export const recordProviderError = internalMutation({ args: {
     owner: row.owner, email: row.email, ideaId: row._id, tier: idea.tier, provider: provider.slice(0, 40), operation: operation.slice(0, 40),
     httpStatus, providerStatus: providerStatus.slice(0, 80), category: category.slice(0, 80), message: message.slice(0, 2000), createdAt: Date.now()
   });
+} });
+export const recordAIResponseError = internalMutation({ args: {
+  ...args, provider: v.string(), model: v.string(), operation: v.string(), tier: v.string(), answerCount: v.number(), finish: v.boolean(),
+  category: v.string(), path: v.string(), actual: v.optional(v.number()), limit: v.optional(v.number()), message: v.string(), structureJson: v.string(), prompt: v.string(), responseText: v.string()
+}, handler: async (ctx, { id, token, ...diagnostic }) => {
+  const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;
+  await ctx.db.insert("aiResponseErrors", { ...diagnostic, email: row.email, ideaId: row._id, provider: diagnostic.provider.slice(0, 40), model: diagnostic.model.slice(0, 120), operation: diagnostic.operation.slice(0, 40), tier: diagnostic.tier.slice(0, 20), category: diagnostic.category.slice(0, 80), path: diagnostic.path.slice(0, 300), message: diagnostic.message.slice(0, 350), structureJson: diagnostic.structureJson.slice(0, 12000), prompt: redactDiagnosticContent(diagnostic.prompt), responseText: redactDiagnosticContent(diagnostic.responseText), createdAt: Date.now() });
 } });
 export const watchdog = internalMutation({ args, handler: async (ctx, { id, token }) => {
   const row = await ctx.db.get(id); if (!row || row.runToken !== token) return;

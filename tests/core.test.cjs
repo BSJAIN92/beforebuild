@@ -7,6 +7,7 @@ const { parseTurn, applyTurn } = require('../.test-build/lib/ai-contract.js');
 const { toMarkdown } = require('../.test-build/lib/export.js');
 const { resolveUsageLimit, resolveGeminiDailyLimit, geminiQuotaDay } = require('../.test-build/lib/limits.js');
 const { founderInputError } = require('../.test-build/lib/input-policy.js');
+const { redactDiagnosticContent } = require('../.test-build/lib/diagnostics.js');
 const { escapeHtml, richText } = require('../.test-build/lib/ui.js');
 const description = 'A small service helping freelance designers follow up on unpaid invoices.';
 function idea(tier = 'basic') { return createIdea(description, tier, tier !== 'basic'); }
@@ -90,17 +91,38 @@ test('founder decisions and completed experiments survive subsequent model respo
   const t = turn(); t.challenges[0].id = 'new-risk'; t.experiments[0].id = 'new-test';
   const out = applyTurn(i, t); assert.equal(out.challenges.find(c => c.id === 'pain').decision, 'decline'); assert.equal(out.experiments.find(e => e.id === 'talk').done, true);
 });
-test('structured output rejects missing final blocks, duplicate blocks and empty entries', () => {
-  const t = turn(); t.complete = true; t.canvas.pop(); assert.throws(() => parseTurn(JSON.stringify(t)), /missing a section/);
+test('structured output accepts partial final responses for validation against saved canvas state', () => {
+  const t = turn(); delete t.complete; t.canvas.pop(); const parsed = parseTurn(JSON.stringify(t), true);
+  assert.equal(parsed.complete, true); assert.equal(parsed.canvas.length, 8);
   const d = turn(); d.canvas[1] = d.canvas[0]; assert.throws(() => parseTurn(JSON.stringify(d)), /duplicate canvas/);
   const e = turn(); e.canvas[0].items[0].text = ''; assert.throws(() => parseTurn(JSON.stringify(e)), /empty or duplicate/);
   const f = turn(); f.experiments.push(f.experiments[0]); assert.throws(() => parseTurn(JSON.stringify(f)), /duplicate/);
 });
-test('server keeps a premature provider completion as an intermediate turn', () => {
+test('AI response arrays are capped and validation diagnostics retain content with secrets redacted before storage', () => {
+  const t = turn(); delete t.complete; t.suggestions = ['one', 'two', 'three', 'four']; t.canvas.push(...t.canvas.slice(0, 2)); t.challenges = Array.from({length: 10}, (_, i) => ({...t.challenges[0], id: `challenge-${i}`})); t.experiments = Array.from({length: 12}, (_, i) => ({...t.experiments[0], id: `experiment-${i}`}));
+  const parsed = parseTurn(JSON.stringify(t)); assert.equal(parsed.suggestions.length, 3); assert.equal(parsed.canvas.length, 9); assert.equal(parsed.challenges.length, 8); assert.equal(parsed.experiments.length, 10);
+  const bad = turn(); delete bad.complete; bad.suggestions = 'not-an-array';
+  assert.throws(() => parseTurn(JSON.stringify(bad)), error => error.name === 'AIResponseValidationError' && error.diagnostic.category === 'invalid-array' && error.diagnostic.path === '$.suggestions' && error.diagnostic.responseText.includes('not-an-array'));
+  const redacted = redactDiagnosticContent('key=AIza123456789012345678901234 token: abcdefghijklmnop Bearer secret-token'); assert.ok(!redacted.includes('AIza123')); assert.ok(!redacted.includes('secret-token'));
+  const schema = fs.readFileSync('convex/schema.ts', 'utf8'); const table = schema.match(/aiResponseErrors: defineTable\(\{([\s\S]*?)\}\)\.index/)[1];
+  assert.match(table, /email/); assert.match(table, /ideaId/); assert.match(table, /prompt/); assert.match(table, /responseText/); assert.doesNotMatch(table, /owner|token|apiKey/);
+  const abuse = fs.readFileSync('convex/abuse.ts', 'utf8'); assert.match(abuse, /requireViewer\(ctx, true\)[\s\S]*aiResponseErrors/);
+});
+test('server assigns completion and ignores any provider completion field', () => {
   const t = turn(); t.complete = true; t.canvas = t.canvas.slice(0, 2);
-  const parsed = parseTurn(JSON.stringify(t), false);
+  const parsed = parseTurn(JSON.stringify(t));
   assert.equal(parsed.complete, false); assert.equal(parsed.canvas.length, 2);
-  assert.throws(() => parseTurn(JSON.stringify(t), true), /missing a section/);
+});
+test('final validation uses sections preserved from earlier turns', () => {
+  const i = idea(); i.answerCount = TIERS.basic.max; i.canvas.partners = turn().canvas[0].items;
+  const t = turn(); delete t.complete; t.canvas = t.canvas.slice(1);
+  const out = applyTurn(i, parseTurn(JSON.stringify(t), true));
+  assert.equal(out.status, 'ready'); assert.equal(coverage(out), 9);
+});
+test('final validation still rejects a section missing from both saved and incoming canvas state', () => {
+  const i = idea(); i.answerCount = TIERS.basic.max;
+  const t = turn(); delete t.complete; t.canvas = t.canvas.slice(1);
+  assert.throws(() => applyTurn(i, parseTurn(JSON.stringify(t), true)), /final canvas is incomplete/);
 });
 test('AI cannot finish prematurely or omit the validation plan', () => {
   const t = turn(); t.complete = true; assert.throws(() => applyTurn(idea(), t), /before exploring/);

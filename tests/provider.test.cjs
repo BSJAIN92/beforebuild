@@ -29,10 +29,17 @@ test('Advanced uses a separate deep research model and tool budget', async () =>
   assert.equal(r.model, 'my-approved-deep-model'); assert.equal(r.tools[0].type, 'web_search_preview'); assert.equal(r.max_tool_calls, 35); assert.equal(r.background, true); assert.equal(r.tool_choice, undefined);
 });
 test('Interview uses structured output, store=false, and no web tools', async () => {
-  const turn = { title: 'Test', reply: 'Thanks.', question: 'What are people using today?', questionHint: 'Think about their workaround.', suggestions: [], complete: false, summary: '', canvas: [], challenges: [], experiments: [] };
+  const turn = { title: 'Test', reply: 'Thanks.', question: 'What are people using today?', questionHint: 'Think about their workaround.', suggestions: [], summary: '', canvas: [], challenges: [], experiments: [] };
   global.fetch = async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return Response.json({ id: 'resp_mock', status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(turn) }] }] }); };
   const result = await provider().interview(idea('basic'), false); const request = requests[0].body;
-  assert.equal(result.question, turn.question); assert.equal(request.store, false); assert.equal(request.tools, undefined); assert.equal(request.text.format.type, 'json_schema'); assert.equal(request.text.format.strict, true);
+  assert.equal(result.question, turn.question); assert.equal(result.complete, false); assert.equal(request.store, false); assert.equal(request.tools, undefined); assert.equal(request.text.format.type, 'json_schema'); assert.equal(request.text.format.strict, true); assert.equal(request.text.format.schema.properties.complete, undefined);
+});
+test('backend keeps the interview open when the tier minimum is reached', async () => {
+  const value = idea('basic'); value.answerCount = 3;
+  const turn = { title: 'Test', reply: 'Thanks.', question: 'What is the smallest test you can run?', questionHint: 'Choose one action this week.', suggestions: [], summary: '', canvas: [], challenges: [], experiments: [] };
+  global.fetch = async (url, options) => Response.json({ id: 'resp_mock', status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(turn) }] }] });
+  const result = await provider().interview(value, false);
+  assert.equal(result.complete, false); assert.equal(result.question, turn.question);
 });
 test('Configured compatible endpoint is server-side and must use HTTPS', async () => {
   process.env.AI_PROVIDER = 'openai-compatible'; process.env.OPENAI_BASE_URL = 'https://gateway.example.com/v1'; await provider().startResearch(idea('intermediate')); assert.equal(requests[0].url, 'https://gateway.example.com/v1/responses');
@@ -62,10 +69,11 @@ test('Provider response IDs cannot escape the expected API path', async () => {
 
 test('Gemini interview uses JSON mode, strict local instructions, and no Basic search tool', async () => {
   process.env.AI_PROVIDER = 'gemini';
-  const turn = { title: 'Test', reply: 'Thanks.', question: 'What are people using today?', questionHint: 'Think about their workaround.', suggestions: [], complete: false, summary: '', canvas: [], challenges: [], experiments: [] };
+  const turn = { title: 'Test', reply: 'Thanks.', question: 'What are people using today?', questionHint: 'Think about their workaround.', suggestions: [], summary: '', canvas: [], challenges: [], experiments: [] };
   global.fetch = async (input, options) => { requests.push(await requestDetails(input, options)); return Response.json({ id: 'int_test', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify(turn) }] }] }); };
   const result = await provider().interview(idea('basic'), false); const request = requests[0];
   assert.equal(result.question, turn.question); assert.match(request.url, /\/interactions$/); assert.equal(request.body.model, 'gemini-3.8-flash');
+  assert.equal(request.body.response_format.schema.properties.complete, undefined);
   assert.ok(!JSON.stringify(request.body.response_format.schema).includes('maxItems'));
   assert.ok(!JSON.stringify(request.body.response_format.schema).includes('maxLength'));
   assert.equal(request.body.response_format.type, 'text'); assert.equal(request.body.response_format.mime_type, 'application/json');

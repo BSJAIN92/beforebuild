@@ -16,3 +16,7 @@ export const providerErrors = query({ args: {}, handler: async ctx => {
   const rows = await ctx.db.query("providerErrors").withIndex("by_created").order("desc").take(200);
   return rows.map(({ _id, owner: _owner, ...row }) => ({ id: _id, ...row }));
 } });
+export const aiResponseErrors = query({ args: {}, handler: async ctx => {
+  await requireViewer(ctx, true);
+  return ctx.db.query("aiResponseErrors").withIndex("by_created").order("desc").take(200);
+} });
